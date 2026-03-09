@@ -1,2 +1,4 @@
 /.venv
 /output
+/.ruff_cache
+*.html

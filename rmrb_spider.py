@@ -4,13 +4,13 @@ import argparse
 import html
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 from reportlab.lib.colors import HexColor
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
@@ -21,13 +21,14 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
 
-NEWEST_PAPER_API = "https://rmt-zuul.81.cn/api-paper/api/newestPaper"
-DEFAULT_BASE_URL = "https://www.81.cn"
+DEFAULT_BASE_URL = "https://paper.people.com.cn"
+LAYOUT_ENTRY_URL = f"{DEFAULT_BASE_URL}/rmrb/pc/layout/"
 REQUEST_TIMEOUT = 30
 
 
 @dataclass(slots=True)
 class Article:
+    paper_name: str
     paper_date: str
     paper_number: str
     section_name: str
@@ -39,7 +40,10 @@ class Article:
     source_url: str
 
 
-class JFJBSpider:
+class RMRBSpider:
+    paper_name = "人民日报"
+    HTML_CHARSET_PATTERN = re.compile(rb"charset=([A-Za-z0-9_\-]+)", re.IGNORECASE)
+
     def __init__(self, base_url: str = DEFAULT_BASE_URL) -> None:
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
@@ -58,109 +62,236 @@ class JFJBSpider:
             datetime.strptime(target_date, "%Y-%m-%d")
             return target_date
 
-        response = self.session.get(NEWEST_PAPER_API, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        payload = response.json()
-        papers = payload.get("data") or []
+        html_text = self._fetch_html(LAYOUT_ENTRY_URL)
+        match = re.search(r"(\d{6})/(\d{2})/node_\d+\.html", html_text)
+        if not match:
+            raise RuntimeError("未能从人民日报入口页解析出当天版面日期")
 
-        jfjb_item = None
-        for item in papers:
-            web_url = str(item.get("webUrl") or "")
-            paper_name = str(item.get("paperName") or "")
-            if "paperName=jfjb" in web_url or "解放军报" in paper_name:
-                jfjb_item = item
-                break
+        year_month = match.group(1)
+        day = match.group(2)
+        return f"{year_month[:4]}-{year_month[4:]}-{day}"
 
-        if not jfjb_item:
-            raise RuntimeError("未能从 newestPaper 接口定位到解放军报当天版面")
-
-        paper_date = str(jfjb_item.get("paperData") or "").strip()
-        if paper_date:
-            return paper_date
-
-        web_url = str(jfjb_item.get("webUrl") or "")
-        query = parse_qs(urlparse(web_url).query)
-        date_from_query = (query.get("paperDate") or [""])[0].strip()
-        if not date_from_query:
-            raise RuntimeError("当天版面已找到，但未能解析 paperDate")
-        return date_from_query
-
-    def fetch_index_payload(self, paper_date: str) -> dict:
-        year, month, day = paper_date.split("-")
-        url = f"{self.base_url}/_szb/jfjb/{year}/{month}/{day}/index.json"
-        response = self.session.get(url, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        return response.json()
-
-    def parse_articles(self, payload: dict, paper_date: str) -> list[Article]:
-        paper_info = payload.get("paperInfo") or []
+    def fetch_articles(self, paper_date: str) -> list[Article]:
+        section_urls = self._discover_section_urls(paper_date)
         articles: list[Article] = []
 
-        for paper in self._sorted_papers(paper_info):
-            paper_number = str(paper.get("paperNumber") or "00").zfill(2)
-            section_name = self._normalize_space(
-                str(paper.get("paperBk") or f"第{paper_number}版")
-            )
-            xy_list = paper.get("xyList") or []
-
-            for article_index, raw_article in enumerate(xy_list, start=1):
-                title = self._normalize_space(
-                    str(raw_article.get("title") or "未命名文章")
-                )
-                subtitle = self._pick_subtitle(raw_article)
-                author = self._normalize_space(str(raw_article.get("author") or ""))
-                paragraphs = self._html_to_paragraphs(
-                    str(raw_article.get("content") or "")
-                )
-                if author:
-                    paragraphs.insert(0, f"作者：{author}")
-
-                source_url = (
-                    f"{self.base_url}/szb_223187/szbxq/index.html"
-                    f"?paperName=jfjb&paperDate={paper_date}"
-                    f"&paperNumber={paper_number}&articleid={raw_article.get('id', '')}"
-                )
-
-                articles.append(
-                    Article(
-                        paper_date=paper_date,
-                        paper_number=paper_number,
-                        section_name=section_name,
-                        article_index=article_index,
-                        title=title,
-                        subtitle=subtitle,
-                        author=author,
-                        paragraphs=paragraphs,
-                        source_url=source_url,
-                    )
-                )
+        for section_url in section_urls:
+            articles.extend(self._parse_section_articles(section_url, paper_date))
 
         return articles
 
-    @staticmethod
-    def _sorted_papers(paper_info: Iterable[dict]) -> list[dict]:
-        def sort_key(item: dict) -> tuple[int, str]:
-            paper_number = str(item.get("paperNumber") or "999")
-            if paper_number.isdigit():
-                return (int(paper_number), paper_number)
-            return (999, paper_number)
+    def _discover_section_urls(self, paper_date: str) -> list[str]:
+        first_node_url = self._build_node_url(paper_date, "01")
+        soup = self._fetch_soup(first_node_url)
 
-        return sorted(paper_info, key=sort_key)
+        section_map: dict[str, str] = {}
+        for anchor in soup.select("a[href]"):
+            href = self._attr_to_text(anchor.get("href"))
+            match = re.search(r"node_(\d+)\.html$", href)
+            if not match:
+                continue
+            section_map[match.group(1)] = urljoin(first_node_url, href)
+
+        if not section_map:
+            raise RuntimeError("未能从人民日报版面页提取版面链接")
+
+        return [
+            section_map[key] for key in sorted(section_map, key=lambda item: int(item))
+        ]
+
+    def _parse_section_articles(
+        self, section_url: str, paper_date: str
+    ) -> list[Article]:
+        soup = self._fetch_soup(section_url)
+
+        paper_number, section_name = self._extract_section_meta(soup, section_url)
+        article_urls = self._extract_article_urls(soup, section_url)
+
+        articles: list[Article] = []
+        for article_index, article_url in enumerate(article_urls, start=1):
+            articles.append(
+                self._parse_article(
+                    article_url=article_url,
+                    paper_date=paper_date,
+                    paper_number=paper_number,
+                    section_name=section_name,
+                    article_index=article_index,
+                )
+            )
+
+        return articles
+
+    def _extract_section_meta(
+        self, soup: BeautifulSoup, section_url: str
+    ) -> tuple[str, str]:
+        section_label = self._normalize_space(
+            self._extract_text(soup.select_one(".paper-bot .left.ban"))
+        )
+        url_match = re.search(r"node_(\d+)\.html$", section_url)
+        paper_number = url_match.group(1) if url_match else "00"
+        paper_number = paper_number.zfill(2)
+
+        if section_label:
+            section_match = re.search(r"(\d+)\D+(.*)", section_label)
+            if section_match:
+                section_name = self._normalize_space(section_match.group(2))
+                return paper_number, section_name or f"第{paper_number}版"
+
+        return paper_number, f"第{paper_number}版"
+
+    def _extract_article_urls(self, soup: BeautifulSoup, section_url: str) -> list[str]:
+        article_urls: list[str] = []
+        seen: set[str] = set()
+
+        for anchor in soup.select(".news-list a[href]"):
+            href = self._attr_to_text(anchor.get("href"))
+            if "content_" not in href:
+                continue
+            article_url = urljoin(section_url, href)
+            if article_url in seen:
+                continue
+            seen.add(article_url)
+            article_urls.append(article_url)
+
+        if article_urls:
+            return article_urls
+
+        for anchor in soup.select("area[href]"):
+            href = self._attr_to_text(anchor.get("href"))
+            if "content_" not in href:
+                continue
+            article_url = urljoin(section_url, href)
+            if article_url in seen:
+                continue
+            seen.add(article_url)
+            article_urls.append(article_url)
+
+        return article_urls
+
+    def _parse_article(
+        self,
+        article_url: str,
+        paper_date: str,
+        paper_number: str,
+        section_name: str,
+        article_index: int,
+    ) -> Article:
+        soup = self._fetch_soup(article_url)
+
+        title = self._normalize_space(
+            self._extract_text(soup.select_one(".article h1"))
+        )
+        if not title:
+            raise RuntimeError(f"未能解析文章标题: {article_url}")
+
+        subtitle = self._extract_subtitle(soup)
+        author = self._extract_author(soup)
+
+        body_container = soup.select_one("#articleContent") or soup.select_one("#ozoom")
+        if body_container is None:
+            raise RuntimeError(f"未能解析正文容器: {article_url}")
+        paragraphs = self._html_to_paragraphs(str(body_container))
+        if author:
+            paragraphs.insert(0, f"作者：{author}")
+
+        return Article(
+            paper_name=self.paper_name,
+            paper_date=paper_date,
+            paper_number=paper_number,
+            section_name=section_name,
+            article_index=article_index,
+            title=title,
+            subtitle=subtitle,
+            author=author,
+            paragraphs=paragraphs,
+            source_url=article_url,
+        )
+
+    def _extract_subtitle(self, soup: BeautifulSoup) -> str:
+        subtitle_node = soup.select_one(".article h2")
+        if subtitle_node is None:
+            return ""
+
+        lines = []
+        paragraphs = subtitle_node.find_all("p")
+        if paragraphs:
+            for paragraph in paragraphs:
+                text = self._normalize_space(paragraph.get_text(" ", strip=True))
+                if text:
+                    lines.append(text)
+        else:
+            text = self._normalize_space(subtitle_node.get_text("\n", strip=True))
+            if text:
+                lines.append(text)
+
+        return "\n".join(lines)
+
+    def _extract_author(self, soup: BeautifulSoup) -> str:
+        author = self._normalize_space(
+            self._extract_text(soup.select_one(".article h3"))
+        )
+        if author:
+            return author
+
+        meta_author = soup.find("meta", attrs={"name": "author"})
+        if meta_author is not None:
+            return self._normalize_space(self._attr_to_text(meta_author.get("content")))
+
+        return ""
+
+    def _build_node_url(self, paper_date: str, paper_number: str) -> str:
+        year, month, day = paper_date.split("-")
+        return (
+            f"{self.base_url}/rmrb/pc/layout/{year}{month}/{day}/"
+            f"node_{paper_number.zfill(2)}.html"
+        )
+
+    def _fetch_soup(self, url: str) -> BeautifulSoup:
+        return BeautifulSoup(self._fetch_html(url), "html.parser")
+
+    def _fetch_html(self, url: str) -> str:
+        response = self.session.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return self._decode_html(response)
+
+    def _decode_html(self, response: requests.Response) -> str:
+        raw = response.content
+        charset = self._detect_charset(raw)
+        if charset:
+            return raw.decode(charset, errors="replace")
+
+        apparent_encoding = response.apparent_encoding
+        if apparent_encoding:
+            return raw.decode(apparent_encoding, errors="replace")
+
+        encoding = response.encoding or "utf-8"
+        return raw.decode(encoding, errors="replace")
+
+    def _detect_charset(self, raw: bytes) -> str | None:
+        match = self.HTML_CHARSET_PATTERN.search(raw[:4096])
+        if not match:
+            return None
+
+        charset = match.group(1).decode("ascii", errors="ignore").lower()
+        return charset or None
+
+    @staticmethod
+    def _extract_text(node: Tag | None) -> str:
+        if node is None:
+            return ""
+        return node.get_text(" ", strip=True)
+
+    @staticmethod
+    def _attr_to_text(value: object) -> str:
+        if isinstance(value, list):
+            return " ".join(str(item) for item in value).strip()
+        if value is None:
+            return ""
+        return str(value).strip()
 
     @staticmethod
     def _normalize_space(text: str) -> str:
         return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
-
-    def _pick_subtitle(self, raw_article: dict) -> str:
-        candidates = [
-            str(raw_article.get("title2") or ""),
-            str(raw_article.get("guideTitle") or ""),
-        ]
-        for candidate in candidates:
-            normalized = self._normalize_space(candidate)
-            if normalized:
-                return normalized
-        return ""
 
     def _html_to_paragraphs(self, raw_html: str) -> list[str]:
         if not raw_html.strip():
@@ -171,7 +302,6 @@ class JFJBSpider:
             tag.decompose()
 
         paragraphs: list[str] = []
-
         for paragraph in soup.find_all("p"):
             text = self._normalize_space(paragraph.get_text(" ", strip=True))
             if text:
@@ -216,7 +346,7 @@ class PDFExporter:
         combined_path: Path | None = None
         if export_combined:
             combined_path = output_dir / self._safe_filename(
-                f"解放军报_{articles[0].paper_date}_全集.pdf"
+                f"{articles[0].paper_name}_{articles[0].paper_date}_全集.pdf"
             )
             story = []
             for index, article in enumerate(articles):
@@ -237,7 +367,7 @@ class PDFExporter:
         sample = getSampleStyleSheet()
         return {
             "title": ParagraphStyle(
-                "JFJBTitle",
+                "RMRBTitle",
                 parent=sample["Title"],
                 fontName=base_font,
                 fontSize=20,
@@ -248,7 +378,7 @@ class PDFExporter:
                 spaceAfter=8,
             ),
             "subtitle": ParagraphStyle(
-                "JFJBSubtitle",
+                "RMRBSubtitle",
                 parent=sample["Normal"],
                 fontName=base_font,
                 fontSize=11.5,
@@ -259,7 +389,7 @@ class PDFExporter:
                 spaceAfter=10,
             ),
             "meta": ParagraphStyle(
-                "JFJBMeta",
+                "RMRBMeta",
                 parent=sample["Normal"],
                 fontName=base_font,
                 fontSize=9.5,
@@ -269,7 +399,7 @@ class PDFExporter:
                 spaceAfter=6,
             ),
             "body": ParagraphStyle(
-                "JFJBBody",
+                "RMRBBody",
                 parent=sample["BodyText"],
                 fontName=base_font,
                 fontSize=11.5,
@@ -328,7 +458,7 @@ class PDFExporter:
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="抓取解放军报当天所有版面文章，并导出为 PDF。"
+        description="抓取人民日报当天所有版面文章，并导出为 PDF。"
     )
     parser.add_argument(
         "--date",
@@ -341,8 +471,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--out-dir",
-        default="output",
-        help="输出目录，默认 output",
+        default="output/rmrb",
+        help="输出目录，默认 output/rmrb",
     )
     parser.add_argument(
         "--combined-only",
@@ -367,10 +497,9 @@ def main() -> None:
     export_individual = not args.combined_only
     export_combined = not args.individual_only
 
-    spider = JFJBSpider(base_url=args.base_url)
+    spider = RMRBSpider(base_url=args.base_url)
     paper_date = spider.resolve_paper_date(args.date)
-    payload = spider.fetch_index_payload(paper_date)
-    articles = spider.parse_articles(payload, paper_date)
+    articles = spider.fetch_articles(paper_date)
 
     if not articles:
         raise RuntimeError("当天未解析到任何文章")
