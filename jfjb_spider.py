@@ -1,0 +1,386 @@
+from __future__ import annotations
+
+import argparse
+import html
+import re
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+from typing import Iterable
+from urllib.parse import parse_qs, urlparse
+
+import requests
+from bs4 import BeautifulSoup
+from reportlab.lib.colors import HexColor
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+
+
+NEWEST_PAPER_API = "https://rmt-zuul.81.cn/api-paper/api/newestPaper"
+DEFAULT_BASE_URL = "https://www.81.cn"
+REQUEST_TIMEOUT = 30
+
+
+@dataclass(slots=True)
+class Article:
+    paper_date: str
+    paper_number: str
+    section_name: str
+    article_index: int
+    title: str
+    subtitle: str
+    author: str
+    paragraphs: list[str]
+    source_url: str
+
+
+class JFJBSpider:
+    def __init__(self, base_url: str = DEFAULT_BASE_URL) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/136.0.0.0 Safari/537.36"
+                )
+            }
+        )
+
+    def resolve_paper_date(self, target_date: str | None) -> str:
+        if target_date:
+            datetime.strptime(target_date, "%Y-%m-%d")
+            return target_date
+
+        response = self.session.get(NEWEST_PAPER_API, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+        papers = payload.get("data") or []
+
+        jfjb_item = None
+        for item in papers:
+            web_url = str(item.get("webUrl") or "")
+            paper_name = str(item.get("paperName") or "")
+            if "paperName=jfjb" in web_url or "解放军报" in paper_name:
+                jfjb_item = item
+                break
+
+        if not jfjb_item:
+            raise RuntimeError("未能从 newestPaper 接口定位到解放军报当天版面")
+
+        paper_date = str(jfjb_item.get("paperData") or "").strip()
+        if paper_date:
+            return paper_date
+
+        web_url = str(jfjb_item.get("webUrl") or "")
+        query = parse_qs(urlparse(web_url).query)
+        date_from_query = (query.get("paperDate") or [""])[0].strip()
+        if not date_from_query:
+            raise RuntimeError("当天版面已找到，但未能解析 paperDate")
+        return date_from_query
+
+    def fetch_index_payload(self, paper_date: str) -> dict:
+        year, month, day = paper_date.split("-")
+        url = f"{self.base_url}/_szb/jfjb/{year}/{month}/{day}/index.json"
+        response = self.session.get(url, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+
+    def parse_articles(self, payload: dict, paper_date: str) -> list[Article]:
+        paper_info = payload.get("paperInfo") or []
+        articles: list[Article] = []
+
+        for paper in self._sorted_papers(paper_info):
+            paper_number = str(paper.get("paperNumber") or "00").zfill(2)
+            section_name = self._normalize_space(str(paper.get("paperBk") or f"第{paper_number}版"))
+            xy_list = paper.get("xyList") or []
+
+            for article_index, raw_article in enumerate(xy_list, start=1):
+                title = self._normalize_space(str(raw_article.get("title") or "未命名文章"))
+                subtitle = self._pick_subtitle(raw_article)
+                author = self._normalize_space(str(raw_article.get("author") or ""))
+                paragraphs = self._html_to_paragraphs(str(raw_article.get("content") or ""))
+                if author:
+                    paragraphs.insert(0, f"作者：{author}")
+
+                source_url = (
+                    f"{self.base_url}/szb_223187/szbxq/index.html"
+                    f"?paperName=jfjb&paperDate={paper_date}"
+                    f"&paperNumber={paper_number}&articleid={raw_article.get('id', '')}"
+                )
+
+                articles.append(
+                    Article(
+                        paper_date=paper_date,
+                        paper_number=paper_number,
+                        section_name=section_name,
+                        article_index=article_index,
+                        title=title,
+                        subtitle=subtitle,
+                        author=author,
+                        paragraphs=paragraphs,
+                        source_url=source_url,
+                    )
+                )
+
+        return articles
+
+    @staticmethod
+    def _sorted_papers(paper_info: Iterable[dict]) -> list[dict]:
+        def sort_key(item: dict) -> tuple[int, str]:
+            paper_number = str(item.get("paperNumber") or "999")
+            if paper_number.isdigit():
+                return (int(paper_number), paper_number)
+            return (999, paper_number)
+
+        return sorted(paper_info, key=sort_key)
+
+    @staticmethod
+    def _normalize_space(text: str) -> str:
+        return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
+
+    def _pick_subtitle(self, raw_article: dict) -> str:
+        candidates = [
+            str(raw_article.get("title2") or ""),
+            str(raw_article.get("guideTitle") or ""),
+        ]
+        for candidate in candidates:
+            normalized = self._normalize_space(candidate)
+            if normalized:
+                return normalized
+        return ""
+
+    def _html_to_paragraphs(self, raw_html: str) -> list[str]:
+        if not raw_html.strip():
+            return ["正文为空"]
+
+        soup = BeautifulSoup(raw_html, "html.parser")
+        for tag in soup(["script", "style"]):
+            tag.decompose()
+
+        paragraphs: list[str] = []
+
+        for paragraph in soup.find_all("p"):
+            text = self._normalize_space(paragraph.get_text(" ", strip=True))
+            if text:
+                paragraphs.append(text)
+
+        if paragraphs:
+            return paragraphs
+
+        fallback = self._normalize_space(soup.get_text("\n", strip=True))
+        return [fallback] if fallback else ["正文为空"]
+
+
+class PDFExporter:
+    def __init__(self) -> None:
+        self.styles = self._build_styles()
+
+    def export_articles(
+        self,
+        articles: list[Article],
+        output_dir: Path,
+        export_individual: bool,
+        export_combined: bool,
+    ) -> tuple[list[Path], Path | None]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        article_paths: list[Path] = []
+
+        if export_individual:
+            for article in articles:
+                section_dir = output_dir / self._safe_filename(
+                    f"第{article.paper_number}版_{article.section_name}"
+                )
+                section_dir.mkdir(parents=True, exist_ok=True)
+                filename = self._safe_filename(
+                    f"{article.article_index:02d}_{article.title}.pdf"
+                )
+                pdf_path = section_dir / filename
+                self._build_pdf(pdf_path, self._build_article_story(article, include_header=True))
+                article_paths.append(pdf_path)
+
+        combined_path: Path | None = None
+        if export_combined:
+            combined_path = output_dir / self._safe_filename(
+                f"解放军报_{articles[0].paper_date}_全集.pdf"
+            )
+            story = []
+            for index, article in enumerate(articles):
+                story.extend(self._build_article_story(article, include_header=True))
+                if index != len(articles) - 1:
+                    story.append(PageBreak())
+            self._build_pdf(combined_path, story)
+
+        return article_paths, combined_path
+
+    def _build_styles(self) -> dict[str, ParagraphStyle]:
+        try:
+            pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        except KeyError:
+            pass
+
+        base_font = "STSong-Light"
+        sample = getSampleStyleSheet()
+        return {
+            "title": ParagraphStyle(
+                "JFJBTitle",
+                parent=sample["Title"],
+                fontName=base_font,
+                fontSize=20,
+                leading=28,
+                alignment=TA_CENTER,
+                textColor=HexColor("#111827"),
+                wordWrap="CJK",
+                spaceAfter=8,
+            ),
+            "subtitle": ParagraphStyle(
+                "JFJBSubtitle",
+                parent=sample["Normal"],
+                fontName=base_font,
+                fontSize=11.5,
+                leading=18,
+                alignment=TA_CENTER,
+                textColor=HexColor("#4b5563"),
+                wordWrap="CJK",
+                spaceAfter=10,
+            ),
+            "meta": ParagraphStyle(
+                "JFJBMeta",
+                parent=sample["Normal"],
+                fontName=base_font,
+                fontSize=9.5,
+                leading=14,
+                textColor=HexColor("#6b7280"),
+                wordWrap="CJK",
+                spaceAfter=6,
+            ),
+            "body": ParagraphStyle(
+                "JFJBBody",
+                parent=sample["BodyText"],
+                fontName=base_font,
+                fontSize=11.5,
+                leading=20,
+                firstLineIndent=24,
+                textColor=HexColor("#111827"),
+                wordWrap="CJK",
+                spaceAfter=6,
+            ),
+        }
+
+    def _build_article_story(self, article: Article, include_header: bool) -> list:
+        story = []
+        title = self._escape(article.title)
+        subtitle = self._escape(article.subtitle)
+        page_label = self._escape(f"第{article.paper_number}版 | {article.section_name}")
+        source_url = self._escape(article.source_url)
+
+        if include_header:
+            story.append(Paragraph(title, self.styles["title"]))
+            if subtitle:
+                story.append(Paragraph(subtitle, self.styles["subtitle"]))
+            story.append(Paragraph(page_label, self.styles["meta"]))
+            story.append(Paragraph(f"来源：{source_url}", self.styles["meta"]))
+            story.append(Spacer(1, 4 * mm))
+
+        for paragraph in article.paragraphs:
+            story.append(Paragraph(self._escape(paragraph), self.styles["body"]))
+
+        return story
+
+    def _build_pdf(self, pdf_path: Path, story: list) -> None:
+        document = SimpleDocTemplate(
+            str(pdf_path),
+            pagesize=A4,
+            leftMargin=18 * mm,
+            rightMargin=18 * mm,
+            topMargin=18 * mm,
+            bottomMargin=18 * mm,
+            title=pdf_path.stem,
+        )
+        document.build(story)
+
+    @staticmethod
+    def _escape(text: str) -> str:
+        return html.escape(text, quote=False).replace("\n", "<br/>")
+
+    @staticmethod
+    def _safe_filename(value: str) -> str:
+        value = re.sub(r"[\\/:*?\"<>|]", "_", value)
+        value = re.sub(r"\s+", " ", value).strip().rstrip(".")
+        return value[:180] if len(value) > 180 else value
+
+
+def build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="抓取解放军报当天所有版面文章，并导出为 PDF。"
+    )
+    parser.add_argument(
+        "--date",
+        help="指定报纸日期，格式为 YYYY-MM-DD；不传时自动抓取当天最新版。",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help=f"站点根地址，默认 {DEFAULT_BASE_URL}",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default="output",
+        help="输出目录，默认 output",
+    )
+    parser.add_argument(
+        "--combined-only",
+        action="store_true",
+        help="仅输出汇总 PDF。",
+    )
+    parser.add_argument(
+        "--individual-only",
+        action="store_true",
+        help="仅输出单篇 PDF。",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = build_argument_parser()
+    args = parser.parse_args()
+
+    if args.combined_only and args.individual_only:
+        parser.error("--combined-only 与 --individual-only 不能同时使用")
+
+    export_individual = not args.combined_only
+    export_combined = not args.individual_only
+
+    spider = JFJBSpider(base_url=args.base_url)
+    paper_date = spider.resolve_paper_date(args.date)
+    payload = spider.fetch_index_payload(paper_date)
+    articles = spider.parse_articles(payload, paper_date)
+
+    if not articles:
+        raise RuntimeError("当天未解析到任何文章")
+
+    output_dir = Path(args.out_dir) / paper_date
+    exporter = PDFExporter()
+    article_paths, combined_path = exporter.export_articles(
+        articles=articles,
+        output_dir=output_dir,
+        export_individual=export_individual,
+        export_combined=export_combined,
+    )
+
+    print(f"日期: {paper_date}")
+    print(f"文章数: {len(articles)}")
+    if article_paths:
+        print(f"单篇 PDF: {len(article_paths)} 个，输出目录: {output_dir}")
+    if combined_path:
+        print(f"汇总 PDF: {combined_path}")
+
+
+if __name__ == "__main__":
+    main()
