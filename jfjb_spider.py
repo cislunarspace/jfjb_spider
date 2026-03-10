@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import html
 import re
+import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import parse_qs, urlparse
@@ -436,11 +437,19 @@ class BookmarkFlowable(Flowable):
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="抓取解放军报当天所有版面文章，并导出为 PDF。"
+        description="抓取解放军报所有版面文章，并导出为 PDF。支持单日或日期范围批量抓取。"
     )
     parser.add_argument(
         "--date",
         help="指定报纸日期，格式为 YYYY-MM-DD；不传时自动抓取当天最新版。",
+    )
+    parser.add_argument(
+        "--start-date",
+        help="批量抓取的起始日期（含），格式 YYYY-MM-DD。需与 --end-date 配合使用。",
+    )
+    parser.add_argument(
+        "--end-date",
+        help="批量抓取的结束日期（含），格式 YYYY-MM-DD。不传则默认为今天。",
     )
     parser.add_argument(
         "--base-url",
@@ -462,7 +471,91 @@ def build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="仅输出单篇 PDF。",
     )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=2.0,
+        help="批量抓取时每天之间的请求间隔秒数，默认 2.0 秒。",
+    )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        default=True,
+        help="跳过已下载的日期（输出目录已存在则跳过），默认启用。",
+    )
+    parser.add_argument(
+        "--no-skip-existing",
+        action="store_false",
+        dest="skip_existing",
+        help="不跳过已下载的日期，重新抓取。",
+    )
     return parser
+
+
+def generate_date_range(start_date: str, end_date: str) -> list[str]:
+    """生成从 start_date 到 end_date（含）的所有日期列表。"""
+    start = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    if start > end:
+        raise ValueError(f"起始日期 {start_date} 晚于结束日期 {end_date}")
+    dates: list[str] = []
+    current = start
+    while current <= end:
+        dates.append(current.strftime("%Y-%m-%d"))
+        current += timedelta(days=1)
+    return dates
+
+
+def crawl_single_date(
+    spider: JFJBSpider,
+    exporter: PDFExporter,
+    paper_date: str,
+    out_dir: Path,
+    export_individual: bool,
+    export_combined: bool,
+    skip_existing: bool,
+) -> bool:
+    """抓取单日的解放军报，返回是否成功。"""
+    output_dir = out_dir / paper_date
+
+    if skip_existing and output_dir.exists():
+        # 检查目录非空则视为已下载
+        if any(output_dir.iterdir()):
+            print(f"[跳过] {paper_date} — 已存在于 {output_dir}")
+            return True
+
+    try:
+        payload = spider.fetch_index_payload(paper_date)
+        articles = spider.parse_articles(payload, paper_date)
+    except requests.exceptions.HTTPError as e:
+        print(f"[失败] {paper_date} — HTTP 错误: {e}")
+        return False
+    except requests.exceptions.ConnectionError as e:
+        print(f"[失败] {paper_date} — 连接错误: {e}")
+        return False
+    except requests.exceptions.Timeout:
+        print(f"[失败] {paper_date} — 请求超时")
+        return False
+    except Exception as e:
+        print(f"[失败] {paper_date} — {e}")
+        return False
+
+    if not articles:
+        print(f"[跳过] {paper_date} — 当天无文章")
+        return True
+
+    try:
+        article_paths, combined_path = exporter.export_articles(
+            articles=articles,
+            output_dir=output_dir,
+            export_individual=export_individual,
+            export_combined=export_combined,
+        )
+        print(f"[完成] {paper_date} — {len(articles)} 篇文章")
+        return True
+    except Exception as e:
+        print(f"[失败] {paper_date} — 导出 PDF 出错: {e}")
+        return False
 
 
 def main() -> None:
@@ -471,11 +564,63 @@ def main() -> None:
 
     if args.combined_only and args.individual_only:
         parser.error("--combined-only 与 --individual-only 不能同时使用")
+    if args.date and args.start_date:
+        parser.error("--date 与 --start-date 不能同时使用，单日用 --date，批量用 --start-date")
 
     export_individual = not args.combined_only
     export_combined = not args.individual_only
+    out_dir = Path(args.out_dir)
 
     spider = JFJBSpider(base_url=args.base_url)
+    exporter = PDFExporter()
+
+    # ==================== 批量模式 ====================
+    if args.start_date:
+        end_date = args.end_date or date.today().strftime("%Y-%m-%d")
+        dates = generate_date_range(args.start_date, end_date)
+        total = len(dates)
+        success_count = 0
+        fail_count = 0
+        skip_count = 0
+
+        print(f"批量抓取: {args.start_date} ~ {end_date}，共 {total} 天")
+        print(f"输出目录: {out_dir.resolve()}")
+        print(f"请求间隔: {args.delay}s | 跳过已有: {args.skip_existing}")
+        print("=" * 60)
+
+        for i, paper_date in enumerate(dates, start=1):
+            print(f"[{i}/{total}] ", end="", flush=True)
+
+            # 检查是否跳过
+            date_dir = out_dir / paper_date
+            if args.skip_existing and date_dir.exists() and any(date_dir.iterdir()):
+                print(f"[跳过] {paper_date} — 已存在")
+                skip_count += 1
+                continue
+
+            ok = crawl_single_date(
+                spider=spider,
+                exporter=exporter,
+                paper_date=paper_date,
+                out_dir=out_dir,
+                export_individual=export_individual,
+                export_combined=export_combined,
+                skip_existing=False,  # 已在外层检查
+            )
+            if ok:
+                success_count += 1
+            else:
+                fail_count += 1
+
+            # 请求间隔（最后一天不用等）
+            if i < total:
+                time.sleep(args.delay)
+
+        print("=" * 60)
+        print(f"抓取完成: 成功 {success_count} | 跳过 {skip_count} | 失败 {fail_count} / 共 {total} 天")
+        return
+
+    # ==================== 单日模式 ====================
     paper_date = spider.resolve_paper_date(args.date)
     payload = spider.fetch_index_payload(paper_date)
     articles = spider.parse_articles(payload, paper_date)
@@ -483,8 +628,7 @@ def main() -> None:
     if not articles:
         raise RuntimeError("当天未解析到任何文章")
 
-    output_dir = Path(args.out_dir) / paper_date
-    exporter = PDFExporter()
+    output_dir = out_dir / paper_date
     article_paths, combined_path = exporter.export_articles(
         articles=articles,
         output_dir=output_dir,
