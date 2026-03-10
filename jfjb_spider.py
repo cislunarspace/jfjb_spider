@@ -17,13 +17,13 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
 
 NEWEST_PAPER_API = "https://rmt-zuul.81.cn/api-paper/api/newestPaper"
 DEFAULT_BASE_URL = "https://www.81.cn"
-REQUEST_TIMEOUT = 30
+REQUEST_TIMEOUT = 30 
 
 
 @dataclass(slots=True)
@@ -246,18 +246,35 @@ class PDFExporter:
         return article_paths, combined_path
 
     def _build_styles(self) -> dict[str, ParagraphStyle]:
-        try:
-            pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-        except KeyError:
-            pass
+        import os
+        
+        # 定义字体文件路径（Windows 系统）
+        font_paths = {
+            'SimHei': r'C:\Windows\Fonts\simhei.ttf',      # 黑体
+            'SimSun': r'C:\Windows\Fonts\simsun.ttc',      # 宋体
+            'TimesNewRoman': r'C:\Windows\Fonts\times.ttf', # Times New Roman
+        }
+        
+        # 注册字体
+        for font_name, font_path in font_paths.items():
+            if os.path.exists(font_path):
+                try:
+                    font = TTFont(font_name, font_path)
+                    # TTC 文件会给嵌入名添加 "-0" 后缀，清除它
+                    if font_path.lower().endswith('.ttc'):
+                        font.face.subfontNameX = b''
+                    pdfmetrics.registerFont(font)
+                except Exception as e:
+                    print(f"警告：无法加载字体 {font_path}: {e}")
+            else:
+                print(f"警告：字体文件不存在 {font_path}")
 
-        base_font = "STSong-Light"
         sample = getSampleStyleSheet()
         return {
             "title": ParagraphStyle(
                 "JFJBTitle",
                 parent=sample["Title"],
-                fontName=base_font,
+                fontName="SimHei",  # 标题用黑体
                 fontSize=20,
                 leading=28,
                 alignment=TA_CENTER,
@@ -268,7 +285,7 @@ class PDFExporter:
             "subtitle": ParagraphStyle(
                 "JFJBSubtitle",
                 parent=sample["Normal"],
-                fontName=base_font,
+                fontName="SimHei",  # 副标题用黑体
                 fontSize=11.5,
                 leading=18,
                 alignment=TA_CENTER,
@@ -279,7 +296,7 @@ class PDFExporter:
             "meta": ParagraphStyle(
                 "JFJBMeta",
                 parent=sample["Normal"],
-                fontName=base_font,
+                fontName="SimSun",  # 元信息用宋体
                 fontSize=9.5,
                 leading=14,
                 textColor=HexColor("#6b7280"),
@@ -289,7 +306,7 @@ class PDFExporter:
             "body": ParagraphStyle(
                 "JFJBBody",
                 parent=sample["BodyText"],
-                fontName=base_font,
+                fontName="SimSun",  # 正文用宋体
                 fontSize=11.5,
                 leading=20,
                 firstLineIndent=24,
@@ -315,6 +332,7 @@ class PDFExporter:
         source_url = self._escape(article.source_url)
 
         if include_header:
+            # 标题和副标题使用黑体，不需要英文字体混排
             title_paragraph = Paragraph(title, self.styles["title"])
             if bookmark_title and bookmark_key:
                 setattr(title_paragraph, "bookmark_title", bookmark_title)
@@ -323,12 +341,16 @@ class PDFExporter:
             story.append(title_paragraph)
             if subtitle:
                 story.append(Paragraph(subtitle, self.styles["subtitle"]))
-            story.append(Paragraph(page_label, self.styles["meta"]))
-            story.append(Paragraph(f"来源：{source_url}", self.styles["meta"]))
+            
+            # 元信息使用宋体 + Times New Roman 混排
+            story.append(Paragraph(self._format_mixed_font(page_label), self.styles["meta"]))
+            story.append(Paragraph(self._format_mixed_font(f"来源：{source_url}"), self.styles["meta"]))
             story.append(Spacer(1, 4 * mm))
 
+        # 正文使用宋体 + Times New Roman 混排
         for paragraph in article.paragraphs:
-            story.append(Paragraph(self._escape(paragraph), self.styles["body"]))
+            formatted_text = self._format_mixed_font(self._escape(paragraph))
+            story.append(Paragraph(formatted_text, self.styles["body"]))
 
         return story
 
@@ -347,6 +369,32 @@ class PDFExporter:
     @staticmethod
     def _escape(text: str) -> str:
         return html.escape(text, quote=False).replace("\n", "<br/>")
+
+    @staticmethod
+    def _format_mixed_font(text: str, chinese_font: str = "SimSun", english_font: str = "TimesNewRoman") -> str:
+        """
+        处理中英文混排文本，中文使用指定中文字体，英文使用 Times New Roman
+        
+        通过正则表达式将英文字符（包括数字和常见标点）用<font>标签包裹
+        """
+        import re
+        
+        # 匹配连续的英文字母、数字、空格和英文标点
+        pattern = r'([a-zA-Z0-9\s.,!?;:\'\"()\-@#$%^&*+=_|~`/<>\[\]{}\\]+)'
+        
+        parts = re.split(pattern, text)
+        result = []
+        
+        for part in parts:
+            if not part:
+                continue
+            # 如果主要是英文字符，则用英文字体包裹
+            if re.match(r'^[a-zA-Z0-9\s.,!?;:\'\"()\-@#$%^&*+=_|~`/<>\[\]{}\\]+$', part):
+                result.append(f'<font name="{english_font}">{part}</font>')
+            else:
+                result.append(part)
+        
+        return ''.join(result)
 
     @staticmethod
     def _safe_filename(value: str) -> str:
