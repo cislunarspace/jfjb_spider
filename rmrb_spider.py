@@ -18,7 +18,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
 
 DEFAULT_BASE_URL = "https://paper.people.com.cn"
@@ -84,19 +84,20 @@ class RMRBSpider:
         first_node_url = self._build_node_url(paper_date, "01")
         soup = self._fetch_soup(first_node_url)
 
-        section_map: dict[str, str] = {}
+        section_numbers: set[str] = set()
         for anchor in soup.select("a[href]"):
             href = self._attr_to_text(anchor.get("href"))
             match = re.search(r"node_(\d+)\.html$", href)
             if not match:
                 continue
-            section_map[match.group(1)] = urljoin(first_node_url, href)
+            section_numbers.add(match.group(1))
 
-        if not section_map:
+        if not section_numbers:
             raise RuntimeError("未能从人民日报版面页提取版面链接")
 
         return [
-            section_map[key] for key in sorted(section_map, key=lambda item: int(item))
+            self._build_node_url(paper_date, key)
+            for key in sorted(section_numbers, key=lambda item: int(item))
         ]
 
     def _parse_section_articles(
@@ -132,9 +133,10 @@ class RMRBSpider:
         paper_number = paper_number.zfill(2)
 
         if section_label:
-            section_match = re.search(r"(\d+)\D+(.*)", section_label)
-            if section_match:
-                section_name = self._normalize_space(section_match.group(2))
+            normalized_label = section_label.replace(":", "：")
+            if "：" in normalized_label:
+                _, raw_section_name = normalized_label.split("：", 1)
+                section_name = self._normalize_space(raw_section_name)
                 return paper_number, section_name or f"第{paper_number}版"
 
         return paper_number, f"第{paper_number}版"
@@ -349,8 +351,26 @@ class PDFExporter:
                 f"{articles[0].paper_name}_{articles[0].paper_date}_全集.pdf"
             )
             story = []
+            current_section: tuple[str, str] | None = None
             for index, article in enumerate(articles):
-                story.extend(self._build_article_story(article, include_header=True))
+                section = (article.paper_number, article.section_name)
+                if section != current_section:
+                    story.append(
+                        BookmarkFlowable(
+                            title=f"第{article.paper_number}版 {article.section_name}",
+                            key=f"section-{article.paper_number}",
+                            level=0,
+                        )
+                    )
+                    current_section = section
+                story.extend(
+                    self._build_article_story(
+                        article,
+                        include_header=True,
+                        bookmark_title=article.title,
+                        bookmark_key=f"article-{index + 1:04d}",
+                    )
+                )
                 if index != len(articles) - 1:
                     story.append(PageBreak())
             self._build_pdf(combined_path, story)
@@ -411,7 +431,13 @@ class PDFExporter:
             ),
         }
 
-    def _build_article_story(self, article: Article, include_header: bool) -> list:
+    def _build_article_story(
+        self,
+        article: Article,
+        include_header: bool,
+        bookmark_title: str | None = None,
+        bookmark_key: str | None = None,
+    ) -> list:
         story = []
         title = self._escape(article.title)
         subtitle = self._escape(article.subtitle)
@@ -421,7 +447,12 @@ class PDFExporter:
         source_url = self._escape(article.source_url)
 
         if include_header:
-            story.append(Paragraph(title, self.styles["title"]))
+            title_paragraph = Paragraph(title, self.styles["title"])
+            if bookmark_title and bookmark_key:
+                setattr(title_paragraph, "bookmark_title", bookmark_title)
+                setattr(title_paragraph, "bookmark_key", bookmark_key)
+                setattr(title_paragraph, "bookmark_level", 1)
+            story.append(title_paragraph)
             if subtitle:
                 story.append(Paragraph(subtitle, self.styles["subtitle"]))
             story.append(Paragraph(page_label, self.styles["meta"]))
@@ -434,7 +465,7 @@ class PDFExporter:
         return story
 
     def _build_pdf(self, pdf_path: Path, story: list) -> None:
-        document = SimpleDocTemplate(
+        document = BookmarkDocTemplate(
             str(pdf_path),
             pagesize=A4,
             leftMargin=18 * mm,
@@ -454,6 +485,37 @@ class PDFExporter:
         value = re.sub(r"[\\/:*?\"<>|]", "_", value)
         value = re.sub(r"\s+", " ", value).strip().rstrip(".")
         return value[:180] if len(value) > 180 else value
+
+
+class BookmarkDocTemplate(SimpleDocTemplate):
+    def afterFlowable(self, flowable: object) -> None:
+        bookmark_title = getattr(flowable, "bookmark_title", None)
+        bookmark_key = getattr(flowable, "bookmark_key", None)
+        bookmark_level = getattr(flowable, "bookmark_level", None)
+
+        if not bookmark_title or not bookmark_key or bookmark_level is None:
+            return
+
+        if not getattr(self, "_outline_enabled", False):
+            self.canv.showOutline()
+            self._outline_enabled = True
+
+        self.canv.bookmarkPage(bookmark_key)
+        self.canv.addOutlineEntry(bookmark_title, bookmark_key, bookmark_level)
+
+
+class BookmarkFlowable(Flowable):
+    def __init__(self, title: str, key: str, level: int) -> None:
+        super().__init__()
+        self.bookmark_title = title
+        self.bookmark_key = key
+        self.bookmark_level = level
+
+    def wrap(self, availWidth: float, availHeight: float) -> tuple[float, float]:
+        return (0, 0)
+
+    def draw(self) -> None:
+        return None
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
