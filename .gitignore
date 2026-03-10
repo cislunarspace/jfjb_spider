@@ -2,3 +2,4 @@
 /output
 /.ruff_cache
 *.html
+/__pycache__
