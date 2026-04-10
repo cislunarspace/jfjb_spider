@@ -304,10 +304,10 @@ class PDFExporter:
             # 元信息（宋体 + Times New Roman 混排）
             if has_english_font:
                 story.append(
-                    Paragraph(format_mixed_font(page_label), self.styles["meta"])
+                    Paragraph(_format_mixed_font(page_label), self.styles["meta"])
                 )
                 story.append(
-                    Paragraph(format_mixed_font(f"来源：{source_url}"), self.styles["meta"])
+                    Paragraph(_format_mixed_font(f"来源：{source_url}"), self.styles["meta"])
                 )
             else:
                 story.append(Paragraph(page_label, self.styles["meta"]))
@@ -318,7 +318,7 @@ class PDFExporter:
         for paragraph in article.paragraphs:
             escaped = _escape(paragraph)
             if has_english_font:
-                formatted_text = format_mixed_font(escaped)
+                formatted_text = _format_mixed_font(escaped)
             else:
                 formatted_text = escaped
             story.append(Paragraph(formatted_text, self.styles["body"]))
@@ -359,7 +359,7 @@ def _escape(text: str) -> str:
     return html.escape(text, quote=False).replace("\n", "<br/>")
 
 
-def format_mixed_font(
+def _format_mixed_font(
     text: str,
     chinese_font: str = "SimSun",
     english_font: str = "TimesNewRoman",

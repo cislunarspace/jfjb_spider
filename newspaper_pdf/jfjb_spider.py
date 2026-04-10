@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from newspaper_pdf.cli import add_common_arguments, build_font_paths
+from newspaper_pdf.cli import add_common_arguments, build_font_paths, setup_logging
 from newspaper_pdf.models import Article
 from newspaper_pdf.network import create_session, retry_get
 from newspaper_pdf.pdf import PDFExporter
@@ -349,10 +349,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     """解放军报爬虫主入口。"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(message)s",
-    )
+    setup_logging()
 
     parser = build_argument_parser()
     args = parser.parse_args()

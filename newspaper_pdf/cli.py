@@ -1,13 +1,25 @@
 """共享命令行参数解析工具。
 
-提供两个爬虫共用的 argparse 参数工厂函数，
+提供两个爬虫共用的 argparse 参数工厂函数和日志配置，
 确保 CLI 接口风格统一。
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
+
+
+def setup_logging() -> None:
+    """配置统一的日志输出格式。
+
+    在 main() 入口处调用一次，所有模块的 logger 输出将使用相同格式。
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+    )
 
 
 def add_common_arguments(parser: argparse.ArgumentParser) -> None:

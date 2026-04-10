@@ -25,7 +25,7 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from newspaper_pdf.cli import add_common_arguments, build_font_paths
+from newspaper_pdf.cli import add_common_arguments, build_font_paths, setup_logging
 from newspaper_pdf.models import Article
 from newspaper_pdf.network import create_session, retry_get
 from newspaper_pdf.pdf import PDFExporter
@@ -55,10 +55,10 @@ class RMRBSpider:
         session: HTTP 会话对象
     """
 
-    paper_name = "人民日报"
+    _PAPER_NAME = "人民日报"
 
     # 从 HTML meta 标签或 HTTP 头部提取字符集的正则
-    HTML_CHARSET_PATTERN = re.compile(rb"charset=([A-Za-z0-9_\-]+)", re.IGNORECASE)
+    _HTML_CHARSET_PATTERN = re.compile(rb"charset=([A-Za-z0-9_\-]+)", re.IGNORECASE)
 
     def __init__(self, base_url: str = DEFAULT_BASE_URL) -> None:
         self.base_url = base_url.rstrip("/")
@@ -294,7 +294,7 @@ class RMRBSpider:
             paragraphs.insert(0, f"作者：{author}")
 
         return Article(
-            paper_name=self.paper_name,
+            paper_name=self._PAPER_NAME,
             paper_date=paper_date,
             paper_number=paper_number,
             section_name=section_name,
@@ -422,7 +422,7 @@ class RMRBSpider:
         Returns:
             字符集名称（小写），未检测到则返回 None
         """
-        match = self.HTML_CHARSET_PATTERN.search(raw[:4096])
+        match = self._HTML_CHARSET_PATTERN.search(raw[:4096])
         if not match:
             return None
 
@@ -467,10 +467,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     """人民日报爬虫主入口。"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(message)s",
-    )
+    setup_logging()
 
     parser = build_argument_parser()
     args = parser.parse_args()
