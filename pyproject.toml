@@ -1,0 +1,14 @@
+[project]
+name = "newspaper-pdf"
+version = "2.0.0"
+description = "解放军报 / 人民日报文章 PDF 爬虫"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31,<3",
+    "beautifulsoup4>=4.12,<5",
+    "reportlab>=4.0,<5",
+]
+
+[project.scripts]
+jfjb = "newspaper_pdf.jfjb_spider:main"
+rmrb = "newspaper_pdf.rmrb_spider:main"
