@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -211,19 +210,37 @@ class TestPDFExporterBuildStyles:
 
 @pytest.mark.integration
 class TestPDFExporterExportArticles:
-    def _make_exporter(self) -> PDFExporter:
-        """创建使用可用 TTF 字体的 PDFExporter（集成测试需要）。
+    @staticmethod
+    def _make_exporter() -> PDFExporter:
+        """创建使用系统可用 TTF 字体的 PDFExporter。
 
-        使用系统上可用的韩文字体作为 CJK 字体替代。
+        自动发现系统上的 TTF 字体（跳过 ReportLab 不支持的 OTF/TTC），
+        无可用字体时跳过测试。
         """
-        return PDFExporter(
-            style_prefix="Test",
-            custom_font_paths={
-                "SimHei": Path("/usr/share/fonts/truetype/unfonts-core/UnBatangBold.ttf"),
-                "SimSun": Path("/usr/share/fonts/truetype/unfonts-core/UnBatang.ttf"),
-                "TimesNewRoman": Path("/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"),
-            },
+        from newspaper_pdf.fonts import _find_font_in_dirs, _get_system_font_dirs
+
+        dirs = _get_system_font_dirs()
+        font_map: dict[str, Path] = {}
+
+        # 按候选列表查找可用 TTF（跳过 OTF/TTC，ReportLab 兼容性差）
+        cjk_bold = _find_font_in_dirs("UnBatangBold.ttf", dirs) or _find_font_in_dirs("WenQuanYiZenHei.ttf", dirs)
+        cjk_regular = _find_font_in_dirs("UnBatang.ttf", dirs) or _find_font_in_dirs("WenQuanYiMicroHei.ttf", dirs)
+        times = (
+            _find_font_in_dirs("LiberationSerif-Regular.ttf", dirs)
+            or _find_font_in_dirs("DejaVuSerif.ttf", dirs)
+            or _find_font_in_dirs("FreeSerif.ttf", dirs)
         )
+
+        if cjk_bold:
+            font_map["SimHei"] = cjk_bold
+        if cjk_regular:
+            font_map["SimSun"] = cjk_regular
+        if times:
+            font_map["TimesNewRoman"] = times
+
+        if not font_map:
+            pytest.skip("系统无可用 TTF 字体，跳过 PDF 生成测试")
+        return PDFExporter(style_prefix="Test", custom_font_paths=font_map)
 
     def test_export_empty_list(self, tmp_path: Path) -> None:
         exporter = self._make_exporter()

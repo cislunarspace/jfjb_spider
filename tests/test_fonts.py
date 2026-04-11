@@ -82,14 +82,16 @@ class TestResolveFonts:
         assert "SimHei" in result
         assert result["SimHei"] == font_file
 
-    def test_custom_path_not_exist(self, tmp_path: Path) -> None:
+    def test_custom_path_not_exist(self, tmp_path: Path, monkeypatch) -> None:
         fake_path = tmp_path / "nonexistent.ttf"
-        # 不会因为路径不存在而崩溃，只是不会被使用
-        # 但由于没有其他字体源，可能抛出 RuntimeError
-        try:
-            resolve_fonts(custom_paths={"SimHei": fake_path})
-        except RuntimeError:
-            pass  # 预期的：没有找到 CJK 字体
+        monkeypatch.delenv("NEWSPAPER_FONT_SIMHEI", raising=False)
+        monkeypatch.delenv("NEWSPAPER_FONT_SIMSUN", raising=False)
+        monkeypatch.delenv("NEWSPAPER_FONT_TIMES", raising=False)
+        monkeypatch.setattr(
+            "newspaper_pdf.fonts._get_system_font_dirs", lambda: [tmp_path]
+        )
+        with pytest.raises(RuntimeError, match="未找到任何中文字体"):
+            resolve_fonts(custom_paths={"SimHei": fake_path}, font_dir=tmp_path)
 
     def test_font_dir(self, tmp_path: Path) -> None:
         font_file = tmp_path / "simsun.ttc"
