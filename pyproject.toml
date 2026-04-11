@@ -9,6 +9,25 @@ dependencies = [
     "reportlab>=4.0,<5",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-cov>=5.0", "pytest-mock>=3.12"]
+
 [project.scripts]
 jfjb = "newspaper_pdf.jfjb_spider:main"
 rmrb = "newspaper_pdf.rmrb_spider:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: 纯单元测试",
+    "integration: 需要 mock 或文件系统的集成测试",
+]
+
+[tool.coverage.run]
+source = ["newspaper_pdf"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.",
+    "pragma: no cover",
+]

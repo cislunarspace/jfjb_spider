@@ -1,0 +1,40 @@
+{
+  "paperInfo": [
+    {
+      "paperNumber": "01",
+      "paperBk": "要闻",
+      "xyList": [
+        {
+          "id": "art-001",
+          "title": "测试文章标题一",
+          "title2": "测试副标题一",
+          "guideTitle": "",
+          "author": "张三",
+          "content": "<p>这是第一段正文。</p><p>这是第二段正文。</p>"
+        },
+        {
+          "id": "art-002",
+          "title": "测试文章标题二",
+          "title2": "",
+          "guideTitle": "导读内容",
+          "author": "",
+          "content": "<p>无作者的文章正文。</p>"
+        }
+      ]
+    },
+    {
+      "paperNumber": "02",
+      "paperBk": "军事新闻",
+      "xyList": [
+        {
+          "id": "art-003",
+          "title": "第三篇文章",
+          "title2": "",
+          "guideTitle": "",
+          "author": "李四",
+          "content": "<p>第三篇文章正文。</p>"
+        }
+      ]
+    }
+  ]
+}
