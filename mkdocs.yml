@@ -1,0 +1,76 @@
+site_name: newspaper-pdf — 报纸文章 PDF 爬虫
+site_description: 解放军报 / 人民日报文章 PDF 爬虫工具包
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换至深色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换至浅色模式
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search:
+      separator: '[\s\u4e00-\u9fff\uff00-\uffef]+'
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            merge_init_into_class: true
+            show_signature_annotations: true
+            filters: ["!^_", "!__"]  # 隐藏私有方法和 dunder
+
+nav:
+  - 首页: index.md
+  - 安装: installation.md
+  - 快速上手: quickstart.md
+  - 使用指南:
+      - 解放军报: usage/jfjb.md
+      - 人民日报: usage/rmrb.md
+      - 字体配置: usage/fonts.md
+      - 输出说明: usage/output.md
+  - API 参考:
+      - 数据模型: api/models.md
+      - PDF 导出: api/pdf.md
+      - 字体管理: api/fonts.md
+      - 网络请求: api/network.md
+      - 工具函数: api/utils.md
+      - 命令行: api/cli.md
+      - 解放军报爬虫: api/jfjb_spider.md
+      - 人民日报爬虫: api/rmrb_spider.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
