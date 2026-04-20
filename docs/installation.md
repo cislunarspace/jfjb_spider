@@ -17,7 +17,7 @@ cd jfjb_spider
 ### 2. 安装依赖
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 依赖包：
@@ -27,6 +27,8 @@ pip install -r requirements.txt
 | `requests` | HTTP 请求 |
 | `beautifulsoup4` | HTML 解析 |
 | `reportlab` | PDF 生成 |
+| `PyQt6` | GUI 界面 |
+| `PyQt6-WebEngine` | PDF 预览（嵌入浏览器） |
 
 ### 3. 安装中文字体
 
@@ -65,17 +67,29 @@ pip install -r requirements.txt
 
     ```bash
     # 命令行参数
-    python jfjb.py --font-simhei /path/to/simhei.ttf
+    uv run python -m newspaper_pdf.jfjb_spider --font-simhei /path/to/simhei.ttf
 
     # 或环境变量
     export NEWSPAPER_FONT_SIMHEI=/path/to/simhei.ttf
-    python jfjb.py
+    uv run python -m newspaper_pdf.jfjb_spider
     ```
 
 ## 验证安装
 
 ```bash
-python jfjb.py --help
+uv run python -m newspaper_pdf.jfjb_spider --help
 ```
 
 如果看到命令行参数列表，说明安装成功。
+
+## GUI 界面
+
+安装完成后，可以通过图形界面操作：
+
+```bash
+uv run newspaper-pdf-ui
+```
+
+GUI 提供两个面板：
+- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取
+- **结果浏览**：浏览输出目录、预览 PDF 文件

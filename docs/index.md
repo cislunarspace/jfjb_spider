@@ -14,10 +14,10 @@
 
 ```bash
 # 安装依赖（需要 Python 3.10+）
-pip install -r requirements.txt
+uv sync
 
 # 抓取今天的解放军报
-python jfjb.py
+uv run python -m newspaper_pdf.jfjb_spider
 
 # 查看输出
 ls output/$(date +%Y-%m-%d)/
@@ -25,16 +25,29 @@ ls output/$(date +%Y-%m-%d)/
 
 就这么简单。PDF 文件会自动生成在 `output/日期/` 目录下。
 
+## GUI 界面
+
+除了命令行，还可以通过图形界面操作：
+
+```bash
+uv run newspaper-pdf-ui
+```
+
+GUI 提供两个面板：
+- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取
+- **结果浏览**：浏览输出目录、预览 PDF 文件
+
 ## 两个爬虫
 
-| 爬虫 | 数据源 | 入口 | 抓取范围 |
-|------|--------|------|----------|
-| 解放军报 | 81.cn JSON API | `python jfjb.py` | 单日 / 批量日期范围 |
-| 人民日报 | paper.people.com.cn HTML | `python rmrb.py` | 单日 |
+| 爬虫 | 数据源 | 入口命令 | 抓取范围 |
+|------|--------|----------|----------|
+| 解放军报 | 81.cn JSON API | `uv run python -m newspaper_pdf.jfjb_spider` | 单日 / 批量日期范围 |
+| 人民日报 | paper.people.com.cn HTML | `uv run python -m newspaper_pdf.rmrb_spider` | 单日 |
 
 ## 快速导航
 
 - **[安装指南](installation.md)** — 依赖安装和字体配置
 - **[快速上手](quickstart.md)** — 常用命令速查
 - **[使用指南](usage/jfjb.md)** — 各爬虫的详细用法
+- **[GUI 界面](usage/gui.md)** — 图形界面使用方法
 - **[API 参考](api/models.md)** — 模块接口文档

@@ -6,10 +6,10 @@
 
 ```bash
 # 1. 安装依赖（需要 Python 3.10+）
-pip install -r requirements.txt
+uv sync
 
 # 2. 抓取今天的解放军报
-python jfjb.py
+uv run python -m newspaper_pdf.jfjb_spider
 
 # 3. 查看输出
 ls output/$(date +%Y-%m-%d)/
@@ -17,33 +17,48 @@ ls output/$(date +%Y-%m-%d)/
 
 就这么简单。PDF 文件会自动生成在 `output/日期/` 目录下。
 
+## GUI 界面
+
+除了命令行，还可以通过图形界面操作：
+
+```bash
+uv run newspaper-pdf-ui
+```
+
+GUI 提供两个面板：
+- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取
+- **结果浏览**：浏览输出目录、预览 PDF 文件
+
 ## 两个爬虫
 
-| 爬虫 | 数据源 | 入口 | 抓取范围 |
-|------|--------|------|----------|
-| 解放军报 | 81.cn JSON API | `python jfjb.py` | 单日 / 批量日期范围 |
-| 人民日报 | paper.people.com.cn HTML | `python rmrb.py` | 单日 |
+| 爬虫 | 数据源 | 入口命令 | 抓取范围 |
+|------|--------|----------|----------|
+| 解放军报 | 81.cn JSON API | `uv run python -m newspaper_pdf.jfjb_spider` | 单日 / 批量日期范围 |
+| 人民日报 | paper.people.com.cn HTML | `uv run python -m newspaper_pdf.rmrb_spider` | 单日 |
 
 ## 常用命令
 
 ```bash
 # 抓取今天
-python jfjb.py
-python rmrb.py
+uv run python -m newspaper_pdf.jfjb_spider
+uv run python -m newspaper_pdf.rmrb_spider
 
 # 指定日期
-python jfjb.py --date 2026-03-10
-python rmrb.py --date 2026-03-10
+uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
+uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
 
 # 批量抓取（仅解放军报）
-python jfjb.py --start-date 2026-01-01 --end-date 2026-03-31 --delay 2
+uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-01-01 --end-date 2026-03-31 --delay 2
 
 # 只生成一个合集 PDF（不分单篇）
-python jfjb.py --combined-only
+uv run python -m newspaper_pdf.jfjb_spider --combined-only
+
+# GUI 界面
+uv run newspaper-pdf-ui
 
 # 查看完整参数列表
-python jfjb.py --help
-python rmrb.py --help
+uv run python -m newspaper_pdf.jfjb_spider --help
+uv run python -m newspaper_pdf.rmrb_spider --help
 ```
 
 ## 输出说明
@@ -132,6 +147,12 @@ newspaper_pdf/          ← Python 包
   cli.py                命令行参数
   jfjb_spider.py        解放军报爬虫
   rmrb_spider.py        人民日报爬虫
-jfjb.py                 解放军报入口
-rmrb.py                 人民日报入口
+  gui/                  ← GUI 界面
+    app.py              主窗口
+    crawl_panel.py       抓取面板
+    result_panel.py      结果浏览面板
+    workers.py           后台任务线程
+    styles.py            样式表
+jfjb.py                 解放军报入口（兼容旧用法）
+rmrb.py                 人民日报入口（兼容旧用法）
 ```

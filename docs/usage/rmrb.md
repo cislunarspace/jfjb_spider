@@ -6,10 +6,10 @@
 
 ```bash
 # 抓取今天的报纸
-python rmrb.py
+uv run python -m newspaper_pdf.rmrb_spider
 
 # 抓取指定日期
-python rmrb.py --date 2026-03-10
+uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
 ```
 
 ## 工作流程

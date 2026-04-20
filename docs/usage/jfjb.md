@@ -6,10 +6,10 @@
 
 ```bash
 # 抓取今天的报纸
-python jfjb.py
+uv run python -m newspaper_pdf.jfjb_spider
 
 # 抓取指定日期
-python jfjb.py --date 2026-03-10
+uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
 ```
 
 ## 批量抓取
@@ -18,13 +18,13 @@ python jfjb.py --date 2026-03-10
 
 ```bash
 # 抓取一个月的报纸
-python jfjb.py --start-date 2026-03-01 --end-date 2026-03-31
+uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-03-01 --end-date 2026-03-31
 
 # 自定义请求间隔（避免被限流）
-python jfjb.py --start-date 2026-03-01 --delay 3
+uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-03-01 --delay 3
 
 # 不指定结束日期时，默认抓取到今天
-python jfjb.py --start-date 2026-03-01
+uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-03-01
 ```
 
 批量抓取的行为：
