@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -96,6 +97,11 @@ class CrawlWorker(QThread):
             payload = spider.fetch_index_payload(paper_date)
             articles = spider.parse_articles(payload, paper_date)
 
+            if self._cancel_flag:
+                self.log.emit("WARNING", "任务已取消")
+                self.finished.emit(0, 0, 0, 1)
+                return
+
             if not articles:
                 self.log.emit("WARNING", "当天未解析到任何文章")
                 self.progress.emit(1, 1, "无文章")
@@ -122,8 +128,6 @@ class CrawlWorker(QThread):
 
     def _run_batch(self, spider: JFJBSpider, exporter: PDFExporter) -> None:
         """执行批量日期范围抓取。"""
-        from datetime import date
-
         end = self.end_date or date.today().strftime("%Y-%m-%d")
         dates = generate_date_range(self.start_date, end)
         total = len(dates)
@@ -171,6 +175,11 @@ class CrawlWorker(QThread):
             self.log.emit("INFO", f"日期: {paper_date}")
 
             articles = spider.fetch_articles(paper_date)
+
+            if self._cancel_flag:
+                self.log.emit("WARNING", "任务已取消")
+                self.finished.emit(0, 0, 0, 1)
+                return
 
             if not articles:
                 self.log.emit("WARNING", "当天未解析到任何文章")
