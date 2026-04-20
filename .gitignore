@@ -61,3 +61,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# uv
+uv.lock
+
+# PyQt
+*.ui.py
