@@ -134,3 +134,23 @@ class TestCrawlWorkerSingleDate:
         worker.run()
 
         assert len(emitted) > 0
+
+
+class TestCrawlWorkerCancel:
+    """验证取消机制。"""
+
+    def test_cancel_sets_flag(self) -> None:
+        """调用 cancel() 应设置取消标志。"""
+        worker = CrawlWorker(
+            paper_type="jfjb",
+            paper_date="2026-03-10",
+            start_date=None,
+            end_date=None,
+            output_dir=Path("output"),
+            export_individual=True,
+            export_combined=True,
+            skip_existing=True,
+        )
+        assert worker._cancel_flag is False
+        worker.cancel()
+        assert worker._cancel_flag is True
