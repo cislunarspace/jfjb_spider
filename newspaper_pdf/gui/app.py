@@ -42,8 +42,6 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """初始化界面。"""
-        from PyQt6.QtWidgets import QVBoxLayout
-
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
