@@ -13,20 +13,21 @@ Two Python web spiders that scrape Chinese newspaper articles and export them as
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+uv sync
 
-# Run spiders
-python jfjb.py                                    # Today's PLA Daily
-python jfjb.py --date 2026-03-10                  # Specific date
-python jfjb.py --start-date 2026-01-01 --delay 2  # Batch mode
-python rmrb.py                                    # Today's People's Daily
-python rmrb.py --date 2026-03-10                  # Specific date
+# Run spiders (CLI)
+uv run python -m newspaper_pdf.jfjb_spider        # Today's PLA Daily
+uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
+uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-01-01 --delay 2  # Batch
+uv run python -m newspaper_pdf.rmrb_spider        # Today's People's Daily
+uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
+
+# Run GUI
+uv run newspaper-pdf-ui
 
 # Lint
-ruff check .
+uv run ruff check .
 ```
-
-No test suite exists.
 
 ## Architecture
 
@@ -42,6 +43,11 @@ No test suite exists.
 | `cli.py` | Shared argparse argument factory + `setup_logging` + font path extraction |
 | `jfjb_spider.py` | `JFJBSpider` class + batch mode logic + CLI |
 | `rmrb_spider.py` | `RMRBSpider` class + CLI |
+| `gui/app.py` | PyQt6 主窗口 + QApplication 入口 |
+| `gui/crawl_panel.py` | 抓取面板：参数配置、进度条、日志 |
+| `gui/result_panel.py` | 结果浏览面板：文件树 + PDF 渲染 |
+| `gui/workers.py` | QThread 后台抓取任务 |
+| `gui/styles.py` | 全局 QSS 样式表 |
 
 ### Key Design Decisions
 
