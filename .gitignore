@@ -57,6 +57,11 @@ htmlcov/
 
 # HTML files (if generated)
 *.html
+!frontend/index.html
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
 
 # OS
 .DS_Store
