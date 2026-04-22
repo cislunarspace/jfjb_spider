@@ -25,7 +25,15 @@ import requests
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from newspaper_pdf.cli import add_common_arguments, build_font_paths, setup_logging
+from newspaper_pdf.cli import (
+    add_common_arguments,
+    build_font_paths,
+    emit_error,
+    emit_finished,
+    emit_log,
+    emit_progress,
+    setup_logging,
+)
 from newspaper_pdf.models import Article
 from newspaper_pdf.network import create_session, retry_get
 from newspaper_pdf.pdf import PDFExporter
@@ -478,26 +486,44 @@ def main() -> None:
     export_individual = not args.combined_only
     export_combined = not args.individual_only
     font_paths = build_font_paths(args)
+    json_mode = args.json_progress
 
     spider = RMRBSpider(base_url=args.base_url)
 
     try:
         paper_date = spider.resolve_paper_date(args.date)
+        if json_mode:
+            emit_progress(current=1, total=1, message=f"正在抓取 {paper_date}")
         articles = spider.fetch_articles(paper_date)
     except requests.exceptions.HTTPError as e:
-        logger.error("HTTP 错误: %s", e)
+        if json_mode:
+            emit_error(message=f"HTTP 错误: {e}")
+        else:
+            logger.error("HTTP 错误: %s", e)
         return
     except requests.exceptions.ConnectionError as e:
-        logger.error("连接错误: %s", e)
+        if json_mode:
+            emit_error(message=f"连接错误: {e}")
+        else:
+            logger.error("连接错误: %s", e)
         return
     except requests.exceptions.Timeout:
-        logger.error("请求超时")
+        if json_mode:
+            emit_error(message="请求超时")
+        else:
+            logger.error("请求超时")
         return
     except Exception as e:
-        logger.error("抓取失败: %s", e)
+        if json_mode:
+            emit_error(message=f"抓取失败: {e}")
+        else:
+            logger.error("抓取失败: %s", e)
         return
 
     if not articles:
+        if json_mode:
+            emit_error(message="当天未解析到任何文章")
+            return
         raise RuntimeError("当天未解析到任何文章")
 
     output_dir = Path(args.out_dir) / paper_date
@@ -513,12 +539,16 @@ def main() -> None:
         export_combined=export_combined,
     )
 
-    logger.info("日期: %s", paper_date)
-    logger.info("文章数: %d", len(articles))
-    if article_paths:
-        logger.info("单篇 PDF: %d 个，输出目录: %s", len(article_paths), output_dir)
-    if combined_path:
-        logger.info("汇总 PDF: %s", combined_path)
+    if json_mode:
+        emit_log(level="INFO", message=f"日期: {paper_date}, 文章数: {len(articles)}")
+        emit_finished(success=1, fail=0, skip=0, total=1)
+    else:
+        logger.info("日期: %s", paper_date)
+        logger.info("文章数: %d", len(articles))
+        if article_paths:
+            logger.info("单篇 PDF: %d 个，输出目录: %s", len(article_paths), output_dir)
+        if combined_path:
+            logger.info("汇总 PDF: %s", combined_path)
 
 
 if __name__ == "__main__":
