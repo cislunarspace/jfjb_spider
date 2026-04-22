@@ -3,6 +3,8 @@
 ## 环境要求
 
 - Python 3.10+
+- Rust（cargo）— 用于 Web Dashboard 后端
+- Node.js（npm）— 用于 Web Dashboard 前端
 - 操作系统：Windows / Linux / macOS
 
 ## 安装步骤
@@ -14,7 +16,7 @@ git clone <仓库地址>
 cd jfjb_spider
 ```
 
-### 2. 安装依赖
+### 2. 安装 Python 依赖
 
 ```bash
 uv sync
@@ -27,10 +29,18 @@ uv sync
 | `requests` | HTTP 请求 |
 | `beautifulsoup4` | HTML 解析 |
 | `reportlab` | PDF 生成 |
-| `PyQt6` | GUI 界面 |
-| `PyQt6-WebEngine` | PDF 预览（嵌入浏览器） |
 
-### 3. 安装中文字体
+### 3. 安装 Web Dashboard（可选）
+
+```bash
+# 构建 Rust 后端
+cd server && cargo build
+
+# 安装前端依赖
+cd ../frontend && npm install
+```
+
+### 4. 安装中文字体
 
 程序需要中文字体来渲染 PDF。按优先级自动查找：
 
@@ -82,14 +92,16 @@ uv run python -m newspaper_pdf.jfjb_spider --help
 
 如果看到命令行参数列表，说明安装成功。
 
-## GUI 界面
+## Web Dashboard
 
-安装完成后，可以通过图形界面操作：
+安装完成后，可以通过浏览器操作：
 
 ```bash
-uv run newspaper-pdf-ui
+# 启动后端
+cd server && cargo run
+
+# 另一个终端启动前端
+cd frontend && npm run dev
 ```
 
-GUI 提供两个面板：
-- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取
-- **结果浏览**：浏览输出目录、预览 PDF 文件
+打开 http://localhost:5173 即可使用。详见 [Web Dashboard 使用说明](usage/web.md)。

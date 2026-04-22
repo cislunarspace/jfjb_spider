@@ -17,17 +17,21 @@ ls output/$(date +%Y-%m-%d)/
 
 就这么简单。PDF 文件会自动生成在 `output/日期/` 目录下。
 
-## GUI 界面
+## Web Dashboard
 
-除了命令行，还可以通过图形界面操作：
+除了命令行，还可以通过浏览器操作：
 
 ```bash
-uv run newspaper-pdf-ui
+# 启动后端服务
+cd server && cargo run
+
+# 另一个终端启动前端开发服务器
+cd frontend && npm run dev
 ```
 
-GUI 提供两个面板：
-- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取
-- **结果浏览**：浏览输出目录、预览 PDF 文件
+打开 http://localhost:5173 即可使用。Dashboard 提供两个页面：
+- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取，实时进度显示
+- **结果浏览**：按日期浏览输出文件，在线预览 PDF
 
 ## 两个爬虫
 
@@ -53,8 +57,8 @@ uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-01-01 --end-date 20
 # 只生成一个合集 PDF（不分单篇）
 uv run python -m newspaper_pdf.jfjb_spider --combined-only
 
-# GUI 界面
-uv run newspaper-pdf-ui
+# Web Dashboard 生产构建
+cd frontend && npm run build && cd ../server && cargo build --release
 
 # 查看完整参数列表
 uv run python -m newspaper_pdf.jfjb_spider --help
@@ -138,21 +142,22 @@ sudo yum install google-noto-sans-cjk-fonts
 ## 项目结构
 
 ```
-newspaper_pdf/          ← Python 包
+newspaper_pdf/          ← Python 爬虫 + PDF 生成
   models.py             Article 数据模型
   fonts.py              跨平台字体发现
   pdf.py                PDF 导出器
   utils.py              工具函数
   network.py            HTTP 会话 + 重试
-  cli.py                命令行参数
+  cli.py                命令行参数 + JSON 进度输出
   jfjb_spider.py        解放军报爬虫
   rmrb_spider.py        人民日报爬虫
-  gui/                  ← GUI 界面
-    app.py              主窗口
-    crawl_panel.py       抓取面板
-    result_panel.py      结果浏览面板
-    workers.py           后台任务线程
-    styles.py            样式表
-jfjb.py                 解放军报入口（兼容旧用法）
-rmrb.py                 人民日报入口（兼容旧用法）
+server/                 ← Rust (Axum) 后端
+  src/main.rs           服务入口
+  src/api.rs            REST API + SSE
+  src/crawler.rs        Python 子进程管理
+  src/files.rs          文件列表 + 下载
+frontend/               ← Vue 3 + TypeScript 前端
+  src/views/            页面组件
+  src/components/       UI 组件
+  src/api/              API 客户端
 ```

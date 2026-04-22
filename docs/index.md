@@ -10,6 +10,8 @@
 - **PDF 书签目录** — 按版面 → 文章两级导航，方便在阅读器中跳转
 - **单篇导出 + 合集导出** — 可选按版面分目录存放，或合并为一个带目录的合集
 
+配套 Rust + Vue Web Dashboard，可通过浏览器配置抓取、监控进度、浏览结果。
+
 ## 30 秒上手
 
 ```bash
@@ -25,17 +27,14 @@ ls output/$(date +%Y-%m-%d)/
 
 就这么简单。PDF 文件会自动生成在 `output/日期/` 目录下。
 
-## GUI 界面
+## Web Dashboard
 
-除了命令行，还可以通过图形界面操作：
+通过浏览器操作抓取和预览：
 
 ```bash
-uv run newspaper-pdf-ui
+cd server && cargo run       # 启动后端
+cd frontend && npm run dev   # 启动前端
 ```
-
-GUI 提供两个面板：
-- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取
-- **结果浏览**：浏览输出目录、预览 PDF 文件
 
 ## 两个爬虫
 
@@ -49,5 +48,5 @@ GUI 提供两个面板：
 - **[安装指南](installation.md)** — 依赖安装和字体配置
 - **[快速上手](quickstart.md)** — 常用命令速查
 - **[使用指南](usage/jfjb.md)** — 各爬虫的详细用法
-- **[GUI 界面](usage/gui.md)** — 图形界面使用方法
+- **[Web Dashboard](usage/web.md)** — 浏览器界面使用方法
 - **[API 参考](api/models.md)** — 模块接口文档

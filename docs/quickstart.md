@@ -42,11 +42,17 @@ uv run python -m newspaper_pdf.jfjb_spider --individual-only
 uv run python -m newspaper_pdf.jfjb_spider --out-dir my_output
 ```
 
-## GUI 界面
+## Web Dashboard
 
 ```bash
-uv run newspaper-pdf-ui
+# 启动后端
+cd server && cargo run
+
+# 另一个终端启动前端开发服务器
+cd frontend && npm run dev
 ```
+
+打开 http://localhost:5173 即可通过浏览器操作。
 
 ## 查看完整参数
 
