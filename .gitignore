@@ -45,7 +45,7 @@ venv.bak/
 htmlcov/
 
 # Output directories
-/output
+output/
 
 # Documentation build output
 /site
@@ -60,6 +60,7 @@ htmlcov/
 !frontend/index.html
 
 # Frontend
+node_modules/
 frontend/node_modules/
 frontend/dist/
 
@@ -70,8 +71,8 @@ Thumbs.db
 # uv
 uv.lock
 
-# PyQt
-*.ui.py
-
 # Rust
 server/target/
+
+# Claude superpowers
+.superpowers/
