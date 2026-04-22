@@ -8,7 +8,6 @@ dependencies = [
     "beautifulsoup4>=4.12,<5",
     "reportlab>=4.0,<5",
     "PyQt6>=6.6,<7",
-    "PyQt6-WebEngine>=6.6,<7",
 ]
 
 [project.optional-dependencies]
