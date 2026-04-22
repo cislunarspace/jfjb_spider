@@ -4,10 +4,12 @@ mod error;
 mod files;
 mod models;
 
+use axum::routing::get_service;
 use axum::Router;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 
 pub struct AppState {
     pub crawl_tx: broadcast::Sender<models::CrawlEvent>,
@@ -32,6 +34,7 @@ async fn main() {
     let app = Router::new()
         .merge(api::routes())
         .merge(files::routes())
+        .fallback_service(get_service(ServeDir::new("frontend/dist")))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
