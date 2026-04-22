@@ -1,0 +1,13 @@
+{
+  "name": "jfjb",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n server,frontend -c blue,green \"cd server && cargo run\" \"cd frontend && npm run dev\"",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run build && cd ../server && cargo run",
+    "lint": "cd frontend && npm run typecheck && cd ../server && cargo clippy"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

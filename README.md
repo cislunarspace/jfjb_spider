@@ -5,33 +5,23 @@
 ## 30 秒上手
 
 ```bash
-# 1. 安装依赖（需要 Python 3.10+）
-uv sync
+# 1. 安装依赖
+uv sync && npm install
 
-# 2. 抓取今天的解放军报
-uv run python -m newspaper_pdf.jfjb_spider
-
-# 3. 查看输出
-ls output/$(date +%Y-%m-%d)/
+# 2. 一键启动 Web Dashboard
+npm run dev
 ```
 
-就这么简单。PDF 文件会自动生成在 `output/日期/` 目录下。
+打开 http://localhost:5173 即可使用。Dashboard 提供：
+- **抓取**：选择报纸类型、日期范围，一键抓取，实时进度显示
+- **结果浏览**：按日期浏览输出文件，在线预览 PDF
 
-## Web Dashboard
-
-除了命令行，还可以通过浏览器操作：
+也可以用命令行直接抓取：
 
 ```bash
-# 启动后端服务
-cd server && cargo run
-
-# 另一个终端启动前端开发服务器
-cd frontend && npm run dev
+uv run python -m newspaper_pdf.jfjb_spider        # 今天的解放军报
+uv run python -m newspaper_pdf.rmrb_spider        # 今天的人民日报
 ```
-
-打开 http://localhost:5173 即可使用。Dashboard 提供两个页面：
-- **抓取**：选择报纸类型、日期范围、输出目录，一键抓取，实时进度显示
-- **结果浏览**：按日期浏览输出文件，在线预览 PDF
 
 ## 两个爬虫
 
@@ -43,22 +33,17 @@ cd frontend && npm run dev
 ## 常用命令
 
 ```bash
-# 抓取今天
+# Web Dashboard（开发模式，前后端同时启动）
+npm run dev
+
+# Web Dashboard（生产构建，只需一个进程）
+npm start
+
+# 命令行抓取
 uv run python -m newspaper_pdf.jfjb_spider
-uv run python -m newspaper_pdf.rmrb_spider
-
-# 指定日期
 uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
-uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
-
-# 批量抓取（仅解放军报）
 uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-01-01 --end-date 2026-03-31 --delay 2
-
-# 只生成一个合集 PDF（不分单篇）
-uv run python -m newspaper_pdf.jfjb_spider --combined-only
-
-# Web Dashboard 生产构建
-cd frontend && npm run build && cd ../server && cargo build --release
+uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
 
 # 查看完整参数列表
 uv run python -m newspaper_pdf.jfjb_spider --help
@@ -108,7 +93,7 @@ output/
 | `--start-date YYYY-MM-DD` | 批量起始日期（含） | - |
 | `--end-date YYYY-MM-DD` | 批量结束日期（含） | 今天 |
 | `--base-url URL` | 站点根地址 | `https://www.81.cn` |
-| `delay SECONDS` | 批量抓取间隔 | 2.0 |
+| `--delay SECONDS` | 批量抓取间隔 | 2.0 |
 | `--skip-existing` | 跳过已下载日期 | 默认启用 |
 | `--no-skip-existing` | 不跳过已下载日期 | - |
 
