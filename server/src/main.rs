@@ -11,7 +11,7 @@ use tower_http::cors::CorsLayer;
 
 pub struct AppState {
     pub crawl_tx: broadcast::Sender<models::CrawlEvent>,
-    pub crawl_handle: Mutex<Option<crawler::CrawlHandle>>,
+    pub crawl_handle: Arc<Mutex<Option<crawler::CrawlHandle>>>,
 }
 
 #[tokio::main]
@@ -26,7 +26,7 @@ async fn main() {
     let (crawl_tx, _) = broadcast::channel::<models::CrawlEvent>(100);
     let state = Arc::new(AppState {
         crawl_tx,
-        crawl_handle: Mutex::new(None),
+        crawl_handle: Arc::new(Mutex::new(None)),
     });
 
     let app = Router::new()
