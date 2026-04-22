@@ -26,7 +26,15 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from newspaper_pdf.cli import add_common_arguments, build_font_paths, setup_logging
+from newspaper_pdf.cli import (
+    add_common_arguments,
+    build_font_paths,
+    setup_logging,
+    emit_progress,
+    emit_log,
+    emit_finished,
+    emit_error,
+)
 from newspaper_pdf.models import Article
 from newspaper_pdf.network import create_session, retry_get
 from newspaper_pdf.pdf import PDFExporter
@@ -363,6 +371,7 @@ def main() -> None:
     export_combined = not args.individual_only
     out_dir = Path(args.out_dir)
     font_paths = build_font_paths(args)
+    json_mode = args.json_progress
 
     spider = JFJBSpider(base_url=args.base_url)
     exporter = PDFExporter(
@@ -380,18 +389,25 @@ def main() -> None:
         fail_count = 0
         skip_count = 0
 
-        logger.info("批量抓取: %s ~ %s，共 %d 天", args.start_date, end_date, total)
-        logger.info("输出目录: %s", out_dir.resolve())
-        logger.info("请求间隔: %ss | 跳过已有: %s", args.delay, args.skip_existing)
-        logger.info("=" * 60)
+        if not json_mode:
+            logger.info("批量抓取: %s ~ %s，共 %d 天", args.start_date, end_date, total)
+            logger.info("输出目录: %s", out_dir.resolve())
+            logger.info("请求间隔: %ss | 跳过已有: %s", args.delay, args.skip_existing)
+            logger.info("=" * 60)
 
         for i, paper_date in enumerate(dates, start=1):
-            logger.info("[%d/%d] ", i)
+            if json_mode:
+                emit_progress(current=i, total=total, message=f"正在抓取 {paper_date}")
+            else:
+                logger.info("[%d/%d] ", i)
 
             # 外层检查跳过已存在日期
             date_dir = out_dir / paper_date
             if args.skip_existing and date_dir.exists() and any(date_dir.iterdir()):
-                logger.info("[跳过] %s — 已存在", paper_date)
+                if json_mode:
+                    emit_log(level="INFO", message=f"[跳过] {paper_date} — 已存在")
+                else:
+                    logger.info("[跳过] %s — 已存在", paper_date)
                 skip_count += 1
                 continue
 
@@ -402,7 +418,7 @@ def main() -> None:
                 out_dir=out_dir,
                 export_individual=export_individual,
                 export_combined=export_combined,
-                skip_existing=False,  # 已在外层检查
+                skip_existing=False,
             )
             if ok:
                 success_count += 1
@@ -413,19 +429,29 @@ def main() -> None:
             if i < total:
                 time.sleep(args.delay)
 
-        logger.info("=" * 60)
-        logger.info(
-            "抓取完成: 成功 %d | 跳过 %d | 失败 %d / 共 %d 天",
-            success_count, skip_count, fail_count, total,
-        )
+        if json_mode:
+            emit_finished(success=success_count, fail=fail_count, skip=skip_count, total=total)
+        else:
+            logger.info("=" * 60)
+            logger.info(
+                "抓取完成: 成功 %d | 跳过 %d | 失败 %d / 共 %d 天",
+                success_count, skip_count, fail_count, total,
+            )
         return
 
     # ==================== 单日模式 ====================
     paper_date = spider.resolve_paper_date(args.date)
+
+    if json_mode:
+        emit_progress(current=1, total=1, message=f"正在抓取 {paper_date}")
+
     payload = spider.fetch_index_payload(paper_date)
     articles = spider.parse_articles(payload, paper_date)
 
     if not articles:
+        if json_mode:
+            emit_error(message="当天未解析到任何文章")
+            return
         raise RuntimeError("当天未解析到任何文章")
 
     output_dir = out_dir / paper_date
@@ -436,12 +462,16 @@ def main() -> None:
         export_combined=export_combined,
     )
 
-    logger.info("日期: %s", paper_date)
-    logger.info("文章数: %d", len(articles))
-    if article_paths:
-        logger.info("单篇 PDF: %d 个，输出目录: %s", len(article_paths), output_dir)
-    if combined_path:
-        logger.info("汇总 PDF: %s", combined_path)
+    if json_mode:
+        emit_log(level="INFO", message=f"日期: {paper_date}, 文章数: {len(articles)}")
+        emit_finished(success=1, fail=0, skip=0, total=1)
+    else:
+        logger.info("日期: %s", paper_date)
+        logger.info("文章数: %d", len(articles))
+        if article_paths:
+            logger.info("单篇 PDF: %d 个，输出目录: %s", len(article_paths), output_dir)
+        if combined_path:
+            logger.info("汇总 PDF: %s", combined_path)
 
 
 if __name__ == "__main__":
