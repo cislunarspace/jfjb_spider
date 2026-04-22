@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
+import sys
 from pathlib import Path
 
 
@@ -73,6 +75,11 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="字体文件所在目录，优先从中查找字体。",
     )
+    parser.add_argument(
+        "--json-progress",
+        action="store_true",
+        help="以 JSON 行格式输出进度（供 Web 服务调用）。",
+    )
 
 
 def build_font_paths(args: argparse.Namespace) -> dict[str, Path]:
@@ -92,3 +99,28 @@ def build_font_paths(args: argparse.Namespace) -> dict[str, Path]:
     if args.font_times:
         paths["TimesNewRoman"] = args.font_times
     return paths
+
+
+def _json_emit(obj: dict) -> None:
+    """输出 JSON 行到 stdout 并立即刷新。"""
+    print(json.dumps(obj, ensure_ascii=False), flush=True)
+
+
+def emit_progress(*, current: int, total: int, message: str) -> None:
+    """输出进度事件。"""
+    _json_emit({"type": "progress", "current": current, "total": total, "message": message})
+
+
+def emit_log(*, level: str, message: str) -> None:
+    """输出日志事件。"""
+    _json_emit({"type": "log", "level": level, "message": message})
+
+
+def emit_finished(*, success: int, fail: int, skip: int, total: int) -> None:
+    """输出完成事件。"""
+    _json_emit({"type": "finished", "success": success, "fail": fail, "skip": skip, "total": total})
+
+
+def emit_error(*, message: str) -> None:
+    """输出错误事件。"""
+    _json_emit({"type": "error", "message": message})
