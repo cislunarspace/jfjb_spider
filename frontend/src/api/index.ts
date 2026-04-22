@@ -14,7 +14,7 @@ export interface CrawlEvent {
   current?: number
   total?: number
   message?: string
-  level?: string
+  level?: 'INFO' | 'WARNING' | 'ERROR' | 'STDERR'
   success?: number
   fail?: number
   skip?: number
@@ -35,38 +35,38 @@ export interface CrawlStatus {
 
 const BASE = '/api'
 
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, init)
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => ({}))
+    const message =
+      typeof body === 'object' && body !== null && 'error' in body
+        ? String((body as Record<string, unknown>).error)
+        : `请求失败: ${res.status}`
+    throw new Error(message)
+  }
+  return res.json()
+}
+
 export async function startCrawl(req: CrawlRequest): Promise<{ task_id: string }> {
-  const res = await fetch(`${BASE}/crawl`, {
+  return apiFetch('/crawl', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || '启动抓取失败')
-  }
-  return res.json()
 }
 
 export async function cancelCrawl(): Promise<void> {
-  const res = await fetch(`${BASE}/crawl/cancel`, { method: 'POST' })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || '取消失败')
-  }
+  await apiFetch('/crawl/cancel', { method: 'POST' })
 }
 
 export async function getStatus(): Promise<CrawlStatus> {
-  const res = await fetch(`${BASE}/status`)
-  return res.json()
+  return apiFetch('/status')
 }
 
 export async function listFiles(subPath?: string): Promise<FileInfo[]> {
-  const url = subPath
-    ? `${BASE}/files?path=${encodeURIComponent(subPath)}`
-    : `${BASE}/files`
-  const res = await fetch(url)
-  return res.json()
+  const query = subPath ? `?path=${encodeURIComponent(subPath)}` : ''
+  return apiFetch(`/files${query}`)
 }
 
 export function getFileUrl(filePath: string): string {

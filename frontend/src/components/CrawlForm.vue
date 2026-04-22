@@ -99,7 +99,7 @@ const isValid = computed(() => {
   if (mode.value === 'single') {
     return !!form.paper_date
   }
-  return !!form.start_date && !!form.end_date
+  return !!form.start_date && !!form.end_date && form.end_date >= form.start_date
 })
 
 function onPaperTypeChange() {
