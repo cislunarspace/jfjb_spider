@@ -5,7 +5,7 @@
 ## 启动方式
 
 ```bash
-# 终端 1：启动 Rust 后端（默认 http://127.0.0.1:3001）
+# 终端 1：启动 Rust 后端（默认 http://127.0.0.1:8080）
 cd server && cargo run
 
 # 终端 2：启动前端开发服务器（默认 http://localhost:5173，自动代理 API）
@@ -58,7 +58,7 @@ cd .. && ./server/target/release/jfjb-server
 ### 启动抓取
 
 ```bash
-curl -X POST http://127.0.0.1:3001/api/crawl \
+curl -X POST http://127.0.0.1:8080/api/crawl \
   -H 'Content-Type: application/json' \
   -d '{"paper_type":"jfjb","paper_date":"2026-03-10","output_dir":"output","export_individual":true,"export_combined":true}'
 ```
@@ -66,7 +66,7 @@ curl -X POST http://127.0.0.1:3001/api/crawl \
 ### 监听事件流
 
 ```bash
-curl http://127.0.0.1:3001/api/crawl/stream
+curl http://127.0.0.1:8080/api/crawl/stream
 ```
 
 事件格式（JSON Lines）：
