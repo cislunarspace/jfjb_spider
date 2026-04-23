@@ -30,8 +30,8 @@ from newspaper_pdf.cli import (
     build_font_paths,
     emit_error,
     emit_finished,
-    emit_log,
     emit_progress,
+    log_message,
     setup_logging,
 )
 from newspaper_pdf.models import Article
@@ -490,47 +490,50 @@ def main() -> None:
 
     spider = RMRBSpider(base_url=args.base_url)
 
+    def _fatal(msg: str) -> None:
+        """输出致命错误后 return，json_mode 时发 emit_error，否则写 logger.error。"""
+        if json_mode:
+            emit_error(message=msg)
+        else:
+            logger.error("%s", msg)
+
     try:
         paper_date = spider.resolve_paper_date(args.date)
+        log_message(logger, f"日期: {paper_date}", json_mode=json_mode)
         if json_mode:
-            emit_progress(current=1, total=1, message=f"正在抓取 {paper_date}")
+            emit_progress(current=0, total=1, message=f"开始抓取 {paper_date}")
         articles = spider.fetch_articles(paper_date)
     except requests.exceptions.HTTPError as e:
-        if json_mode:
-            emit_error(message=f"HTTP 错误: {e}")
-        else:
-            logger.error("HTTP 错误: %s", e)
+        _fatal(f"HTTP 错误: {e}")
         return
     except requests.exceptions.ConnectionError as e:
-        if json_mode:
-            emit_error(message=f"连接错误: {e}")
-        else:
-            logger.error("连接错误: %s", e)
+        _fatal(f"连接错误: {e}")
         return
     except requests.exceptions.Timeout:
-        if json_mode:
-            emit_error(message="请求超时")
-        else:
-            logger.error("请求超时")
+        _fatal("请求超时")
         return
     except Exception as e:
-        if json_mode:
-            emit_error(message=f"抓取失败: {e}")
-        else:
-            logger.error("抓取失败: %s", e)
+        _fatal(f"抓取失败: {e}")
         return
 
     if not articles:
-        if json_mode:
-            emit_error(message="当天未解析到任何文章")
-            return
-        raise RuntimeError("当天未解析到任何文章")
+        _fatal("当天未解析到任何文章")
+        if not json_mode:
+            raise RuntimeError("当天未解析到任何文章")
+        return
+
+    if json_mode:
+        emit_progress(current=1, total=1, message=f"抓取完成，正在导出 PDF ({len(articles)} 篇文章)")
+
+    def _pdf_progress(message: str) -> None:
+        log_message(logger, message, json_mode=json_mode)
 
     output_dir = Path(args.out_dir) / paper_date
     exporter = PDFExporter(
         style_prefix="RMRB",
         custom_font_paths=font_paths,
         font_dir=args.font_dir,
+        progress_callback=_pdf_progress if json_mode else None,
     )
     article_paths, combined_path = exporter.export_articles(
         articles=articles,
@@ -540,7 +543,7 @@ def main() -> None:
     )
 
     if json_mode:
-        emit_log(level="INFO", message=f"日期: {paper_date}, 文章数: {len(articles)}")
+        log_message(logger, f"导出完成，文章数: {len(articles)}", json_mode=True)
         emit_finished(success=1, fail=0, skip=0, total=1)
     else:
         logger.info("日期: %s", paper_date)

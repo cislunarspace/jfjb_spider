@@ -34,6 +34,7 @@ from newspaper_pdf.cli import (
     emit_log,
     emit_finished,
     emit_error,
+    log_message,
 )
 from newspaper_pdf.models import Article
 from newspaper_pdf.network import create_session, retry_get
@@ -256,6 +257,7 @@ def crawl_single_date(
     export_individual: bool,
     export_combined: bool,
     skip_existing: bool,
+    json_mode: bool = False,
 ) -> bool:
     """抓取单日的解放军报，返回是否成功。
 
@@ -267,49 +269,55 @@ def crawl_single_date(
         export_individual: 是否导出单篇 PDF
         export_combined: 是否导出合集 PDF
         skip_existing: 是否跳过已存在的输出目录
+        json_mode: 是否以 JSON 行格式输出进度
 
     Returns:
         True 表示成功或跳过，False 表示失败
     """
     output_dir = out_dir / paper_date
 
+    def _log(msg: str, level: str = "INFO") -> None:
+        log_message(logger, msg, level=level, json_mode=json_mode)
+
     # 跳过已下载的日期
     if skip_existing and output_dir.exists():
         if any(output_dir.iterdir()):
-            logger.info("[跳过] %s — 已存在于 %s", paper_date, output_dir)
+            _log(f"[跳过] {paper_date} — 已存在")
             return True
 
     try:
+        _log(f"[进行] {paper_date} — 获取版面数据")
         payload = spider.fetch_index_payload(paper_date)
         articles = spider.parse_articles(payload, paper_date)
     except requests.exceptions.HTTPError as e:
-        logger.error("[失败] %s — HTTP 错误: %s", paper_date, e)
+        _log(f"[失败] {paper_date} — HTTP 错误: {e}", level="ERROR")
         return False
     except requests.exceptions.ConnectionError as e:
-        logger.error("[失败] %s — 连接错误: %s", paper_date, e)
+        _log(f"[失败] {paper_date} — 连接错误: {e}", level="ERROR")
         return False
     except requests.exceptions.Timeout:
-        logger.error("[失败] %s — 请求超时", paper_date)
+        _log(f"[失败] {paper_date} — 请求超时", level="ERROR")
         return False
     except Exception as e:
-        logger.error("[失败] %s — %s", paper_date, e)
+        _log(f"[失败] {paper_date} — {e}", level="ERROR")
         return False
 
     if not articles:
-        logger.info("[跳过] %s — 当天无文章", paper_date)
+        _log(f"[跳过] {paper_date} — 当天无文章")
         return True
 
     try:
+        _log(f"[进行] {paper_date} — 导出 PDF ({len(articles)} 篇文章)")
         article_paths, combined_path = exporter.export_articles(
             articles=articles,
             output_dir=output_dir,
             export_individual=export_individual,
             export_combined=export_combined,
         )
-        logger.info("[完成] %s — %d 篇文章", paper_date, len(articles))
+        _log(f"[完成] {paper_date} — {len(articles)} 篇文章")
         return True
     except Exception as e:
-        logger.error("[失败] %s — 导出 PDF 出错: %s", paper_date, e)
+        _log(f"[失败] {paper_date} — 导出 PDF 出错: {e}", level="ERROR")
         return False
 
 
@@ -373,11 +381,15 @@ def main() -> None:
     font_paths = build_font_paths(args)
     json_mode = args.json_progress
 
+    def _pdf_progress(message: str) -> None:
+        log_message(logger, message, json_mode=json_mode)
+
     spider = JFJBSpider(base_url=args.base_url)
     exporter = PDFExporter(
         style_prefix="JFJB",
         custom_font_paths=font_paths,
         font_dir=args.font_dir,
+        progress_callback=_pdf_progress if json_mode else None,
     )
 
     # ==================== 批量模式 ====================
@@ -404,10 +416,7 @@ def main() -> None:
             # 外层检查跳过已存在日期
             date_dir = out_dir / paper_date
             if args.skip_existing and date_dir.exists() and any(date_dir.iterdir()):
-                if json_mode:
-                    emit_log(level="INFO", message=f"[跳过] {paper_date} — 已存在")
-                else:
-                    logger.info("[跳过] %s — 已存在", paper_date)
+                log_message(logger, f"[跳过] {paper_date} — 已存在", json_mode=json_mode)
                 skip_count += 1
                 continue
 
@@ -419,6 +428,7 @@ def main() -> None:
                 export_individual=export_individual,
                 export_combined=export_combined,
                 skip_existing=False,
+                json_mode=json_mode,
             )
             if ok:
                 success_count += 1
@@ -443,35 +453,32 @@ def main() -> None:
     paper_date = spider.resolve_paper_date(args.date)
 
     if json_mode:
-        emit_progress(current=1, total=1, message=f"正在抓取 {paper_date}")
+        emit_log(level="INFO", message=f"日期: {paper_date}")
+        emit_progress(current=0, total=1, message=f"开始抓取 {paper_date}")
 
-    payload = spider.fetch_index_payload(paper_date)
-    articles = spider.parse_articles(payload, paper_date)
-
-    if not articles:
-        if json_mode:
-            emit_error(message="当天未解析到任何文章")
-            return
-        raise RuntimeError("当天未解析到任何文章")
-
-    output_dir = out_dir / paper_date
-    article_paths, combined_path = exporter.export_articles(
-        articles=articles,
-        output_dir=output_dir,
+    ok = crawl_single_date(
+        spider=spider,
+        exporter=exporter,
+        paper_date=paper_date,
+        out_dir=out_dir,
         export_individual=export_individual,
         export_combined=export_combined,
+        skip_existing=False,
+        json_mode=json_mode,
     )
 
+    if not ok:
+        if json_mode:
+            emit_error(message=f"{paper_date} 抓取失败")
+        else:
+            logger.error("抓取失败: %s", paper_date)
+        return
+
     if json_mode:
-        emit_log(level="INFO", message=f"日期: {paper_date}, 文章数: {len(articles)}")
         emit_finished(success=1, fail=0, skip=0, total=1)
     else:
         logger.info("日期: %s", paper_date)
-        logger.info("文章数: %d", len(articles))
-        if article_paths:
-            logger.info("单篇 PDF: %d 个，输出目录: %s", len(article_paths), output_dir)
-        if combined_path:
-            logger.info("汇总 PDF: %s", combined_path)
+        logger.info("抓取完成")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from reportlab.lib.colors import HexColor
@@ -111,6 +112,7 @@ class PDFExporter:
         style_prefix: str = "Newspaper",
         custom_font_paths: dict[str, Path] | None = None,
         font_dir: Path | None = None,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> None:
         """初始化 PDF 导出器。
 
@@ -118,10 +120,12 @@ class PDFExporter:
             style_prefix: 段落样式名称前缀，用于区分不同报纸
             custom_font_paths: 用户指定的字体路径映射
             font_dir: 用户指定的字体目录
+            progress_callback: PDF 创建进度回调函数，接收描述字符串
         """
         self._style_prefix = style_prefix
         self._registered_fonts = register_fonts(custom_font_paths, font_dir)
         self.styles = self._build_styles()
+        self._progress_callback = progress_callback
 
     def export_articles(
         self,
@@ -150,7 +154,13 @@ class PDFExporter:
 
         # 导出单篇 PDF
         if export_individual:
-            for article in articles:
+            if self._progress_callback:
+                self._progress_callback(f"开始生成 {len(articles)} 篇单篇 PDF")
+            for i, article in enumerate(articles, start=1):
+                if self._progress_callback:
+                    self._progress_callback(
+                        f"正在生成单篇 PDF [{i}/{len(articles)}]: {article.title}"
+                    )
                 section_dir = output_dir / safe_filename(
                     f"第{article.paper_number}版_{article.section_name}"
                 )
@@ -163,6 +173,10 @@ class PDFExporter:
                     pdf_path, self._build_article_story(article, include_header=True)
                 )
                 article_paths.append(pdf_path)
+                if self._progress_callback:
+                    self._progress_callback(f"已生成单篇 PDF: {pdf_path.name}")
+            if self._progress_callback:
+                self._progress_callback(f"单篇 PDF 生成完成，共 {len(article_paths)} 个")
 
         # 导出合集 PDF
         combined_path: Path | None = None
@@ -170,6 +184,8 @@ class PDFExporter:
             combined_path = output_dir / safe_filename(
                 f"{articles[0].paper_name}_{articles[0].paper_date}_全集.pdf"
             )
+            if self._progress_callback:
+                self._progress_callback(f"开始生成合集 PDF: {combined_path.name}")
             story: list = []
             current_section: tuple[str, str] | None = None
 
@@ -201,6 +217,8 @@ class PDFExporter:
                     story.append(PageBreak())
 
             self._build_pdf(combined_path, story)
+            if self._progress_callback:
+                self._progress_callback(f"合集 PDF 生成完成: {combined_path.name}")
 
         return article_paths, combined_path
 

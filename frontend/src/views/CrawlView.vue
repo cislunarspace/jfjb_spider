@@ -4,7 +4,7 @@
       <CrawlForm :running="running" @submit="onSubmit" @cancel="onCancel" />
     </div>
     <div class="crawl-right">
-      <ProgressLog ref="progressLog" :events="events" />
+      <ProgressLog ref="progressLog" :events="events" :running="running" />
     </div>
   </div>
 </template>
@@ -17,6 +17,7 @@ import ProgressLog from '../components/ProgressLog.vue'
 import {
   startCrawl,
   cancelCrawl,
+  getStatus,
   createEventSource,
   type CrawlRequest,
   type CrawlEvent,
@@ -28,6 +29,10 @@ const events = ref<CrawlEvent[]>([])
 const progressLog = ref<InstanceType<typeof ProgressLog> | null>(null)
 let eventSource: EventSource | null = null
 
+function addEvent(event: CrawlEvent) {
+  events.value = [...events.value, event]
+}
+
 async function onSubmit(req: CrawlRequest) {
   try {
     running.value = true
@@ -35,12 +40,17 @@ async function onSubmit(req: CrawlRequest) {
     progressLog.value?.reset()
 
     const { task_id } = await startCrawl(req)
+    addEvent({ type: 'log', level: 'INFO', message: `任务已启动 (ID: ${task_id})` })
 
     eventSource = createEventSource()
+    eventSource.onopen = () => {
+      addEvent({ type: 'log', level: 'INFO', message: '已连接实时进度流' })
+    }
+
     eventSource.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data) as CrawlEvent
-        events.value.push(event)
+        addEvent(event)
 
         if (event.type === 'finished' || event.type === 'error') {
           eventSource?.close()
@@ -52,18 +62,27 @@ async function onSubmit(req: CrawlRequest) {
           }
         }
       } catch {
-        // ignore parse errors
+        addEvent({ type: 'log', level: 'ERROR', message: '解析进度数据失败' })
       }
     }
 
-    eventSource.onerror = () => {
+    eventSource.onerror = async () => {
+      addEvent({ type: 'log', level: 'ERROR', message: '实时进度流连接中断' })
       eventSource?.close()
       eventSource = null
-      running.value = false
+      // 查询后端确认任务是否仍在运行，避免状态不一致
+      try {
+        const status = await getStatus()
+        if (!status.running) {
+          running.value = false
+        }
+      } catch {
+        running.value = false
+      }
     }
   } catch (err) {
     running.value = false
-    events.value.push({
+    addEvent({
       type: 'error',
       message: err instanceof Error ? err.message : '启动失败',
     })
@@ -73,8 +92,13 @@ async function onSubmit(req: CrawlRequest) {
 async function onCancel() {
   try {
     await cancelCrawl()
-  } catch {
-    // ignore
+    addEvent({ type: 'log', level: 'INFO', message: '已发送取消请求' })
+  } catch (err) {
+    addEvent({
+      type: 'log',
+      level: 'WARNING',
+      message: err instanceof Error ? err.message : '取消请求失败',
+    })
   }
   eventSource?.close()
   eventSource = null

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from newspaper_pdf.pdf import BookmarkFlowable, _escape, _format_mixed_font
@@ -90,6 +92,83 @@ class TestFormatMixedFont:
         assert "使用" in result
         assert "解析" in result
         assert '<font name="TimesNewRoman">HTML</font>' in result
+
+
+# ── PDFExporter progress_callback ───────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestPDFExporterProgressCallback:
+    @patch("newspaper_pdf.pdf.register_fonts", return_value={"SimHei", "SimSun"})
+    def test_callback_receives_messages(self, mock_register, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+        from newspaper_pdf.models import Article
+        from newspaper_pdf.pdf import PDFExporter
+
+        messages: list[str] = []
+        exporter = PDFExporter(progress_callback=messages.append)
+
+        articles = [
+            Article(
+                paper_name="解放军报",
+                paper_date="2026-03-10",
+                paper_number="01",
+                section_name="要闻",
+                article_index=1,
+                title="测试文章",
+                subtitle="",
+                author="",
+                paragraphs=["正文内容。"],
+                source_url="https://example.com",
+            ),
+        ]
+
+        # Mock 掉实际 PDF 构建，避免依赖字体文件
+        with patch.object(exporter, "_build_pdf"), patch.object(
+            exporter, "_build_article_story", return_value=[]
+        ):
+            exporter.export_articles(
+                articles=articles,
+                output_dir=tmp_path,
+                export_individual=True,
+                export_combined=True,
+            )
+
+        assert any("开始生成" in m for m in messages)
+        assert any("单篇 PDF" in m for m in messages)
+        assert any("合集 PDF" in m for m in messages)
+
+    @patch("newspaper_pdf.pdf.register_fonts", return_value={"SimHei", "SimSun"})
+    def test_no_callback_when_none(self, mock_register, tmp_path: Path) -> None:
+        from newspaper_pdf.models import Article
+        from newspaper_pdf.pdf import PDFExporter
+
+        exporter = PDFExporter()
+        articles = [
+            Article(
+                paper_name="解放军报",
+                paper_date="2026-03-10",
+                paper_number="01",
+                section_name="要闻",
+                article_index=1,
+                title="测试文章",
+                subtitle="",
+                author="",
+                paragraphs=["正文内容。"],
+                source_url="https://example.com",
+            ),
+        ]
+
+        with patch.object(exporter, "_build_pdf"), patch.object(
+            exporter, "_build_article_story", return_value=[]
+        ):
+            # 不应抛出异常
+            exporter.export_articles(
+                articles=articles,
+                output_dir=tmp_path,
+                export_individual=True,
+                export_combined=True,
+            )
 
 
 # ── BookmarkFlowable ────────────────────────────────────────────────────────

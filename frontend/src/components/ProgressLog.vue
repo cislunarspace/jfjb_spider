@@ -21,7 +21,7 @@
         {{ entry.message }}
       </div>
       <div v-if="logs.length === 0" class="log-empty">
-        等待抓取任务...
+        {{ running ? '任务启动中，请稍候...' : '等待抓取任务...' }}
       </div>
     </div>
   </div>
@@ -37,7 +37,7 @@ interface LogEntry {
   message: string
 }
 
-const props = defineProps<{ events: CrawlEvent[] }>()
+const props = defineProps<{ events: CrawlEvent[]; running?: boolean }>()
 
 const logArea = ref<HTMLElement | null>(null)
 
@@ -51,7 +51,8 @@ const percent = computed(() => {
 })
 
 const statusText = computed(() => {
-  if (total.value === 0) return '空闲'
+  if (!props.running && total.value === 0) return '空闲'
+  if (props.running && total.value === 0) return '正在初始化...'
   if (current.value >= total.value && total.value > 0) return '已完成'
   return `${current.value} / ${total.value}`
 })

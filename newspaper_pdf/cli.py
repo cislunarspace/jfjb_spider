@@ -123,3 +123,18 @@ def emit_finished(*, success: int, fail: int, skip: int, total: int) -> None:
 def emit_error(*, message: str) -> None:
     """输出错误事件。"""
     _json_emit({"type": "error", "message": message})
+
+
+def log_message(
+    logger: logging.Logger,
+    message: str,
+    *,
+    level: str = "INFO",
+    json_mode: bool = False,
+) -> None:
+    """统一输出日志：json_mode 时输出 JSON 行，否则写入 logging。"""
+    if json_mode:
+        emit_log(level=level, message=message)
+    else:
+        log_fn = getattr(logger, level.lower(), logger.info)
+        log_fn("%s", message)
