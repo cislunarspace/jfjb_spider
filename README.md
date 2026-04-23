@@ -141,6 +141,8 @@ server/                 ← Rust (Axum) 后端
   src/api.rs            REST API + SSE
   src/crawler.rs        Python 子进程管理
   src/files.rs          文件列表 + 下载
+  src/models.rs         共享类型定义
+  src/error.rs          错误处理
 frontend/               ← Vue 3 + TypeScript 前端
   src/views/            页面组件
   src/components/       UI 组件

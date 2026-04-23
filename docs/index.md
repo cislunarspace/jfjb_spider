@@ -15,25 +15,20 @@
 ## 30 秒上手
 
 ```bash
-# 安装依赖（需要 Python 3.10+）
-uv sync
+# 安装依赖
+uv sync && cd frontend && npm install && cd ..
 
-# 抓取今天的解放军报
-uv run python -m newspaper_pdf.jfjb_spider
-
-# 查看输出
-ls output/$(date +%Y-%m-%d)/
+# 一键启动 Web Dashboard（开发模式）
+npm run dev
 ```
 
-就这么简单。PDF 文件会自动生成在 `output/日期/` 目录下。
+打开 http://localhost:5173 即可通过浏览器操作：选择报纸、日期，一键抓取，实时查看进度，浏览和预览 PDF。
 
-## Web Dashboard
-
-通过浏览器操作抓取和预览：
+也可以用命令行直接抓取：
 
 ```bash
-cd server && cargo run       # 启动后端
-cd frontend && npm run dev   # 启动前端
+uv run python -m newspaper_pdf.jfjb_spider        # 今天的解放军报
+uv run python -m newspaper_pdf.rmrb_spider        # 今天的人民日报
 ```
 
 ## 两个爬虫

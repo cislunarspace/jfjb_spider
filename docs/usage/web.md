@@ -5,24 +5,30 @@
 ## 启动方式
 
 ```bash
-# 终端 1：启动 Rust 后端（默认 http://127.0.0.1:8080）
-cd server && cargo run
+# 开发模式（前后端同时启动，支持热更新）
+npm run dev
 
-# 终端 2：启动前端开发服务器（默认 http://localhost:5173，自动代理 API）
-cd frontend && npm run dev
+# 或生产模式（构建前端后启动，只需一个进程）
+npm start
 ```
 
-打开 http://localhost:5173 即可使用。
+- 开发模式：打开 http://localhost:5173，前端自动代理 API 到后端
+- 生产模式：打开 http://localhost:8080，Rust 服务器直接托管前端静态文件
 
 ## 生产部署
 
 ```bash
-cd frontend && npm run build
-cd ../server && cargo build --release
-cd .. && ./server/target/release/jfjb-server
+npm start
 ```
 
-生产模式下 Rust 服务器直接托管前端静态文件，只需一个端口（3000）。
+等价于：
+
+```bash
+cd frontend && npm run build
+cd ../server && cargo run
+```
+
+生产模式下 Rust 服务器直接托管前端静态文件，只需一个端口（8080）。
 
 ## 界面布局
 
@@ -72,6 +78,7 @@ curl http://127.0.0.1:8080/api/crawl/stream
 事件格式（JSON Lines）：
 
 - `{"type":"progress","current":1,"total":30,"message":"正在抓取 2026-03-10"}`
-- `{"type":"log","level":"INFO","message":"日期: 2026-03-10, 文章数: 42"}`
+- `{"type":"log","level":"INFO","message":"[进行] 2026-03-10 — 获取版面数据"}`
+- `{"type":"log","level":"INFO","message":"[完成] 2026-03-10 — 42 篇文章"}`
 - `{"type":"finished","success":1,"fail":0,"skip":0,"total":1}`
 - `{"type":"error","message":"错误信息"}`

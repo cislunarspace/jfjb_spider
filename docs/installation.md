@@ -97,11 +97,11 @@ uv run python -m newspaper_pdf.jfjb_spider --help
 安装完成后，可以通过浏览器操作：
 
 ```bash
-# 启动后端
-cd server && cargo run
+# 开发模式（前后端同时启动，支持热更新）
+npm run dev
 
-# 另一个终端启动前端
-cd frontend && npm run dev
+# 或生产模式（构建前端后启动，只需一个进程）
+npm start
 ```
 
-打开 http://localhost:5173 即可使用。详见 [Web Dashboard 使用说明](usage/web.md)。
+打开 http://localhost:5173（开发模式）或 http://localhost:8080（生产模式）即可使用。详见 [Web Dashboard 使用说明](usage/web.md)。

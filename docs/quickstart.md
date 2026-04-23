@@ -1,6 +1,20 @@
 # 快速上手
 
-## 抓取今天的报纸
+## Web Dashboard（推荐）
+
+```bash
+# 开发模式（前后端同时启动，支持热更新）
+npm run dev
+
+# 或生产模式（构建前端后启动，只需一个进程）
+npm start
+```
+
+打开 http://localhost:5173（开发模式）或 http://localhost:8080（生产模式）即可使用。
+
+## 命令行抓取
+
+### 抓取今天的报纸
 
 ```bash
 # 解放军报
@@ -10,14 +24,14 @@ uv run python -m newspaper_pdf.jfjb_spider
 uv run python -m newspaper_pdf.rmrb_spider
 ```
 
-## 指定日期
+### 指定日期
 
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
 uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
 ```
 
-## 批量抓取（解放军报）
+### 批量抓取（解放军报）
 
 ```bash
 # 抓取 2026 年 1 月到 3 月，每天间隔 2 秒
@@ -26,7 +40,7 @@ uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-01-01 --end-date 20
 
 批量模式下会自动跳过已下载的日期（断点续爬）。
 
-## 控制输出格式
+### 控制输出格式
 
 ```bash
 # 只生成一个合集 PDF（含书签目录）
@@ -36,25 +50,13 @@ uv run python -m newspaper_pdf.jfjb_spider --combined-only
 uv run python -m newspaper_pdf.jfjb_spider --individual-only
 ```
 
-## 自定义输出目录
+### 自定义输出目录
 
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider --out-dir my_output
 ```
 
-## Web Dashboard
-
-```bash
-# 启动后端
-cd server && cargo run
-
-# 另一个终端启动前端开发服务器
-cd frontend && npm run dev
-```
-
-打开 http://localhost:5173 即可通过浏览器操作。
-
-## 查看完整参数
+### 查看完整参数
 
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider --help

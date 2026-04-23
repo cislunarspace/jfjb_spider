@@ -27,8 +27,8 @@ uv run python -m newspaper_pdf.rmrb_spider        # Today's People's Daily
 uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
 
 # Run web dashboard
-cd server && cargo run                              # Start Rust backend
-cd frontend && npm run dev                          # Start Vite dev server
+npm run dev                                          # Dev mode (frontend + backend)
+npm start                                            # Production mode (build + serve)
 
 # Production build
 cd frontend && npm run build && cd ../server && cargo build --release
