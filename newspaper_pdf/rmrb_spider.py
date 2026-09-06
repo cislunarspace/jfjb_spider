@@ -35,7 +35,7 @@ from newspaper_pdf.cli import (
     setup_logging,
 )
 from newspaper_pdf.models import Article
-from newspaper_pdf.network import create_session, retry_get
+from newspaper_pdf.network import create_session, decode_response_html, retry_get
 from newspaper_pdf.pdf import PDFExporter
 from newspaper_pdf.utils import html_to_paragraphs, normalize_space
 
@@ -64,9 +64,6 @@ class RMRBSpider:
     """
 
     _PAPER_NAME = "人民日报"
-
-    # 从 HTML meta 标签或 HTTP 头部提取字符集的正则
-    _HTML_CHARSET_PATTERN = re.compile(rb"charset=([A-Za-z0-9_\-]+)", re.IGNORECASE)
 
     def __init__(self, base_url: str = DEFAULT_BASE_URL) -> None:
         self.base_url = base_url.rstrip("/")
@@ -387,55 +384,7 @@ class RMRBSpider:
     def _fetch_html(self, url: str) -> str:
         """获取 URL 内容，自动处理编码。"""
         response = retry_get(self.session, url)
-        return self._decode_html(response)
-
-    def _decode_html(self, response: requests.Response) -> str:
-        """解码 HTTP 响应内容。
-
-        按优先级尝试以下编码来源：
-        1. HTML 内容中的 charset 声明
-        2. requests 库的 apparent_encoding（chardet 检测）
-        3. HTTP 响应头中的编码，默认 UTF-8
-
-        Args:
-            response: HTTP 响应对象
-
-        Returns:
-            解码后的文本
-        """
-        raw = response.content
-        charset = self._detect_charset(raw)
-        if charset:
-            try:
-                return raw.decode(charset, errors="replace")
-            except (LookupError, UnicodeDecodeError):
-                logger.warning("无效的字符集声明: %s，回退到自动检测", charset)
-
-        apparent_encoding = response.apparent_encoding
-        if apparent_encoding:
-            try:
-                return raw.decode(apparent_encoding, errors="replace")
-            except (LookupError, UnicodeDecodeError):
-                pass
-
-        encoding = response.encoding or "utf-8"
-        return raw.decode(encoding, errors="replace")
-
-    def _detect_charset(self, raw: bytes) -> str | None:
-        """从 HTML 内容前 4096 字节中检测字符集声明。
-
-        Args:
-            raw: HTML 原始字节
-
-        Returns:
-            字符集名称（小写），未检测到则返回 None
-        """
-        match = self._HTML_CHARSET_PATTERN.search(raw[:4096])
-        if not match:
-            return None
-
-        charset = match.group(1).decode("ascii", errors="ignore").lower()
-        return charset or None
+        return decode_response_html(response)
 
 
 def _extract_text(node: Tag | None) -> str:

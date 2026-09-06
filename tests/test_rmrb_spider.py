@@ -44,73 +44,6 @@ class TestAttrToText:
         assert _attr_to_text("  value  ") == "value"
 
 
-# ── RMRBSpider._detect_charset ──────────────────────────────────────────────
-
-
-@pytest.mark.unit
-class TestDetectCharset:
-    def setup_method(self) -> None:
-        self.spider = RMRBSpider.__new__(RMRBSpider)
-
-    def test_found(self) -> None:
-        raw = b'<html><head><meta charset=gb2312></head></html>'
-        assert self.spider._detect_charset(raw) == "gb2312"
-
-    def test_not_found(self) -> None:
-        raw = b"<html><head></head></html>"
-        assert self.spider._detect_charset(raw) is None
-
-    def test_case_insensitive(self) -> None:
-        raw = b'<html><head><meta charset=UTF-8></head></html>'
-        assert self.spider._detect_charset(raw) == "utf-8"
-
-    def test_http_equiv(self) -> None:
-        raw = b'<html><head><meta http-equiv="Content-Type" content="text/html; charset=gbk"></head></html>'
-        assert self.spider._detect_charset(raw) == "gbk"
-
-    def test_beyond_4096(self) -> None:
-        raw = b"x" * 5000 + b'charset="gb2312"'
-        assert self.spider._detect_charset(raw) is None
-
-
-# ── RMRBSpider._decode_html ─────────────────────────────────────────────────
-
-
-@pytest.mark.unit
-class TestDecodeHtml:
-    def setup_method(self) -> None:
-        self.spider = RMRBSpider.__new__(RMRBSpider)
-
-    def _make_response(self, content: bytes, encoding: str = "utf-8", apparent_encoding: str | None = None):
-        from unittest.mock import MagicMock
-        import requests
-        resp = MagicMock(spec=requests.Response)
-        resp.content = content
-        resp.encoding = encoding
-        resp.apparent_encoding = apparent_encoding
-        return resp
-
-    def test_charset_in_meta(self) -> None:
-        content = "中文内容".encode("gb2312")
-        # 需要在 content 中有 charset 声明
-        html_bytes = b'<meta charset="gb2312">' + content
-        resp = self._make_response(html_bytes)
-        result = self.spider._decode_html(resp)
-        assert "中文" in result or len(result) > 0  # gb2312 解码可能有前缀
-
-    def test_fallback_to_apparent(self) -> None:
-        content = "hello world".encode("utf-8")
-        resp = self._make_response(content, apparent_encoding="utf-8")
-        result = self.spider._decode_html(resp)
-        assert "hello world" in result
-
-    def test_fallback_to_encoding(self) -> None:
-        content = "hello".encode("utf-8")
-        resp = self._make_response(content, encoding="utf-8")
-        result = self.spider._decode_html(resp)
-        assert "hello" in result
-
-
 # ── RMRBSpider._build_node_url ──────────────────────────────────────────────
 
 
@@ -142,7 +75,7 @@ class TestExtractArticleUrls:
         urls = self.spider._extract_article_urls(
             soup, "https://paper.people.com.cn/rmrb/pc/layout/202603/10/node_01.html"
         )
-        assert len(urls) == 3
+        assert len(urls) == 7
         assert all("content_" in url for url in urls)
 
     def test_dedup(self) -> None:

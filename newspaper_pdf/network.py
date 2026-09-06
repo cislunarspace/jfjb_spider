@@ -1,11 +1,12 @@
 """网络请求工具模块。
 
-提供 HTTP 会话创建和带重试机制的 GET 请求，供两个爬虫共用。
+提供 HTTP 会话创建、带重试机制的 GET 请求和 HTML 响应解码，供所有爬虫共用。
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 import requests
@@ -21,6 +22,9 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/136.0.0.0 Safari/537.36"
 )
+
+# 从 HTML meta 标签或 HTTP 头部提取字符集的正则
+_HTML_CHARSET_PATTERN = re.compile(rb"charset=([A-Za-z0-9_\-]+)", re.IGNORECASE)
 
 
 def create_session(user_agent: str | None = None) -> requests.Session:
@@ -95,3 +99,53 @@ def retry_get(
                 time.sleep(wait)
 
     raise last_exception  # type: ignore[misc]
+
+
+def decode_response_html(response: requests.Response) -> str:
+    """解码 HTML 响应内容。
+
+    按优先级尝试以下编码来源：
+    1. HTML 内容中的 charset 声明
+    2. requests 库的 apparent_encoding（chardet 检测）
+    3. HTTP 响应头中的编码，默认 UTF-8
+
+    Args:
+        response: HTTP 响应对象
+
+    Returns:
+        解码后的文本
+    """
+    raw = response.content
+    charset = _detect_charset(raw)
+    if charset:
+        try:
+            return raw.decode(charset, errors="replace")
+        except (LookupError, UnicodeDecodeError):
+            logger.warning("无效的字符集声明: %s，回退到自动检测", charset)
+
+    apparent_encoding = response.apparent_encoding
+    if apparent_encoding:
+        try:
+            return raw.decode(apparent_encoding, errors="replace")
+        except (LookupError, UnicodeDecodeError):
+            pass
+
+    encoding = response.encoding or "utf-8"
+    return raw.decode(encoding, errors="replace")
+
+
+def _detect_charset(raw: bytes) -> str | None:
+    """从 HTML 内容前 4096 字节中检测字符集声明。
+
+    Args:
+        raw: HTML 原始字节
+
+    Returns:
+        字符集名称（小写），未检测到则返回 None
+    """
+    match = _HTML_CHARSET_PATTERN.search(raw[:4096])
+    if not match:
+        return None
+
+    charset = match.group(1).decode("ascii", errors="ignore").lower()
+    return charset or None

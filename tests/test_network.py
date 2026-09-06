@@ -10,7 +10,9 @@ import pytest
 from newspaper_pdf.network import (
     DEFAULT_USER_AGENT,
     REQUEST_TIMEOUT,
+    _detect_charset,
     create_session,
+    decode_response_html,
     retry_get,
 )
 
@@ -141,3 +143,62 @@ class TestRetryGet:
 
         retry_get(session, "https://example.com", timeout=60)
         session.get.assert_called_once_with("https://example.com", timeout=60)
+
+
+# ── _detect_charset ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestDetectCharset:
+    def test_found(self) -> None:
+        raw = b'<html><head><meta charset=gb2312></head></html>'
+        assert _detect_charset(raw) == "gb2312"
+
+    def test_not_found(self) -> None:
+        raw = b"<html><head></head></html>"
+        assert _detect_charset(raw) is None
+
+    def test_case_insensitive(self) -> None:
+        raw = b'<html><head><meta charset=UTF-8></head></html>'
+        assert _detect_charset(raw) == "utf-8"
+
+    def test_http_equiv(self) -> None:
+        raw = b'<html><head><meta http-equiv="Content-Type" content="text/html; charset=gbk"></head></html>'
+        assert _detect_charset(raw) == "gbk"
+
+    def test_beyond_4096(self) -> None:
+        raw = b"x" * 5000 + b'charset="gb2312"'
+        assert _detect_charset(raw) is None
+
+
+# ── decode_response_html ─────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestDecodeResponseHtml:
+    def _make_response(self, content: bytes, encoding: str = "utf-8", apparent_encoding: str | None = None):
+        resp = MagicMock(spec=requests.Response)
+        resp.content = content
+        resp.encoding = encoding
+        resp.apparent_encoding = apparent_encoding
+        return resp
+
+    def test_charset_in_meta(self) -> None:
+        content = "中文内容".encode("gb2312")
+        # 需要在 content 中有 charset 声明
+        html_bytes = b'<meta charset="gb2312">' + content
+        resp = self._make_response(html_bytes)
+        result = decode_response_html(resp)
+        assert "中文" in result or len(result) > 0  # gb2312 解码可能有前缀
+
+    def test_fallback_to_apparent(self) -> None:
+        content = "hello world".encode("utf-8")
+        resp = self._make_response(content, apparent_encoding="utf-8")
+        result = decode_response_html(resp)
+        assert "hello world" in result
+
+    def test_fallback_to_encoding(self) -> None:
+        content = "hello".encode("utf-8")
+        resp = self._make_response(content, encoding="utf-8")
+        result = decode_response_html(resp)
+        assert "hello" in result
