@@ -1,5 +1,5 @@
 site_name: newspaper-pdf — 报纸文章 PDF 爬虫
-site_description: 解放军报 / 人民日报文章 PDF 爬虫工具包
+site_description: 解放军报 / 人民日报 / 光明日报文章 PDF 爬虫工具包
 
 theme:
   name: material
@@ -51,6 +51,7 @@ nav:
   - 使用指南:
       - 解放军报: usage/jfjb.md
       - 人民日报: usage/rmrb.md
+      - 光明日报: usage/gmrb.md
       - 字体配置: usage/fonts.md
       - 输出说明: usage/output.md
   - API 参考:
@@ -62,6 +63,7 @@ nav:
       - 命令行: api/cli.md
       - 解放军报爬虫: api/jfjb_spider.md
       - 人民日报爬虫: api/rmrb_spider.md
+      - 光明日报爬虫: api/gmrb_spider.md
 
 markdown_extensions:
   - pymdownx.highlight:

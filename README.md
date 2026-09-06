@@ -1,6 +1,6 @@
 # 报纸文章 PDF 爬虫
 
-抓取 [解放军报](https://www.81.cn)（81.cn）和 [人民日报](https://paper.people.com.cn)（people.com.cn）的文章，导出为排版精美的 PDF 文件。
+抓取 [解放军报](https://www.81.cn)（81.cn）、[人民日报](https://paper.people.com.cn)（people.com.cn）和 [光明日报](https://epaper.gmw.cn/gmrb/)（gmw.cn）的文章，导出为排版精美的 PDF 文件。
 
 ## 30 秒上手
 
@@ -21,14 +21,16 @@ npm run dev
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider        # 今天的解放军报
 uv run python -m newspaper_pdf.rmrb_spider        # 今天的人民日报
+uv run python -m newspaper_pdf.gmrb_spider        # 今天的光明日报
 ```
 
-## 两个爬虫
+## 三个爬虫
 
 | 爬虫 | 数据源 | 入口命令 | 抓取范围 |
 |------|--------|----------|----------|
 | 解放军报 | 81.cn JSON API | `uv run python -m newspaper_pdf.jfjb_spider` | 单日 / 批量日期范围 |
 | 人民日报 | paper.people.com.cn HTML | `uv run python -m newspaper_pdf.rmrb_spider` | 单日 |
+| 光明日报 | epaper.gmw.cn HTML | `uv run python -m newspaper_pdf.gmrb_spider` | 单日 |
 
 ## 常用命令
 
@@ -44,10 +46,29 @@ uv run python -m newspaper_pdf.jfjb_spider
 uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
 uv run python -m newspaper_pdf.jfjb_spider --start-date 2026-01-01 --end-date 2026-03-31 --delay 2
 uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
+uv run python -m newspaper_pdf.gmrb_spider --date 2026-03-10
 
 # 查看完整参数列表
 uv run python -m newspaper_pdf.jfjb_spider --help
 uv run python -m newspaper_pdf.rmrb_spider --help
+uv run python -m newspaper_pdf.gmrb_spider --help
+```
+
+## 开发与测试
+
+```bash
+# 安装测试依赖并运行测试套件
+uv sync --extra test
+uv run pytest
+
+# 后端编译检查 / Lint
+cd server && cargo check && cargo clippy
+
+# 前端类型检查
+cd frontend && npx vue-tsc --noEmit
+
+# 本地构建文档
+uv run --extra docs mkdocs build
 ```
 
 ## 输出说明
@@ -59,12 +80,16 @@ output/
   2026-03-10/                          ← 解放军报（日期目录）
     第01版_要闻/                        ← 按版面分目录
       01_文章标题.pdf                   ← 单篇文章 PDF
-    解放军报_2026-03-10_全集.pdf        ← 当日合集（含书签目录）
   rmrb/
     2026-03-10/                        ← 人民日报
       第01版_要闻/
         ...
       人民日报_2026-03-10_全集.pdf
+  gmrb/
+    2026-03-10/                        ← 光明日报
+      第01版_头版/
+        ...
+      光明日报_2026-03-10_全集.pdf
 ```
 
 每个 PDF 包含：
@@ -78,7 +103,7 @@ output/
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `--date YYYY-MM-DD` | 指定日期 | 自动获取当天 |
-| `--out-dir PATH` | 输出目录 | `output`（解放军报）/ `output/rmrb`（人民日报） |
+| `--out-dir PATH` | 输出目录 | `output`（解放军报）/ `output/rmrb`（人民日报）/ `output/gmrb`（光明日报） |
 | `--combined-only` | 仅输出合集 PDF | 默认输出合集+单篇 |
 | `--individual-only` | 仅输出单篇 PDF | 默认输出合集+单篇 |
 | `--font-simhei PATH` | 黑体字体路径 | 自动发现 |
@@ -102,6 +127,12 @@ output/
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `--base-url URL` | 站点根地址 | `https://paper.people.com.cn` |
+
+### 光明日报专用参数
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--base-url URL` | 站点根地址 | `https://epaper.gmw.cn` |
 
 ## 跨平台字体
 
@@ -132,10 +163,11 @@ newspaper_pdf/          ← Python 爬虫 + PDF 生成
   fonts.py              跨平台字体发现
   pdf.py                PDF 导出器
   utils.py              工具函数
-  network.py            HTTP 会话 + 重试
+  network.py            HTTP 会话 + 重试 + HTML 解码
   cli.py                命令行参数 + JSON 进度输出
   jfjb_spider.py        解放军报爬虫
   rmrb_spider.py        人民日报爬虫
+  gmrb_spider.py        光明日报爬虫
 server/                 ← Rust (Axum) 后端
   src/main.rs           服务入口
   src/api.rs            REST API + SSE

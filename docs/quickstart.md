@@ -22,6 +22,9 @@ uv run python -m newspaper_pdf.jfjb_spider
 
 # 人民日报
 uv run python -m newspaper_pdf.rmrb_spider
+
+# 光明日报
+uv run python -m newspaper_pdf.gmrb_spider
 ```
 
 ### 指定日期
@@ -29,6 +32,7 @@ uv run python -m newspaper_pdf.rmrb_spider
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider --date 2026-03-10
 uv run python -m newspaper_pdf.rmrb_spider --date 2026-03-10
+uv run python -m newspaper_pdf.gmrb_spider --date 2026-03-10
 ```
 
 ### 批量抓取（解放军报）
@@ -61,6 +65,7 @@ uv run python -m newspaper_pdf.jfjb_spider --out-dir my_output
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider --help
 uv run python -m newspaper_pdf.rmrb_spider --help
+uv run python -m newspaper_pdf.gmrb_spider --help
 ```
 
 ## 常见问题

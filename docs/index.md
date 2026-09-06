@@ -1,6 +1,6 @@
 # newspaper-pdf
 
-抓取 [解放军报](https://www.81.cn) 和 [人民日报](https://paper.people.com.cn) 的文章，导出为排版精美的 PDF 文件。
+抓取 [解放军报](https://www.81.cn)、[人民日报](https://paper.people.com.cn) 和 [光明日报](https://epaper.gmw.cn/gmrb/) 的文章，导出为排版精美的 PDF 文件。
 
 ## 这是什么？
 
@@ -29,14 +29,16 @@ npm run dev
 ```bash
 uv run python -m newspaper_pdf.jfjb_spider        # 今天的解放军报
 uv run python -m newspaper_pdf.rmrb_spider        # 今天的人民日报
+uv run python -m newspaper_pdf.gmrb_spider        # 今天的光明日报
 ```
 
-## 两个爬虫
+## 三个爬虫
 
 | 爬虫 | 数据源 | 入口命令 | 抓取范围 |
 |------|--------|----------|----------|
 | 解放军报 | 81.cn JSON API | `uv run python -m newspaper_pdf.jfjb_spider` | 单日 / 批量日期范围 |
 | 人民日报 | paper.people.com.cn HTML | `uv run python -m newspaper_pdf.rmrb_spider` | 单日 |
+| 光明日报 | epaper.gmw.cn HTML | `uv run python -m newspaper_pdf.gmrb_spider` | 单日 |
 
 ## 快速导航
 
