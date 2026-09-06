@@ -1,5 +1,5 @@
 export interface CrawlRequest {
-  paper_type: 'jfjb' | 'rmrb'
+  paper_type: 'jfjb' | 'rmrb' | 'gmrb'
   paper_date?: string
   start_date?: string
   end_date?: string

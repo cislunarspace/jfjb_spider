@@ -1,7 +1,7 @@
 [project]
 name = "newspaper-pdf"
 version = "2.0.0"
-description = "解放军报 / 人民日报文章 PDF 爬虫"
+description = "解放军报 / 人民日报 / 光明日报文章 PDF 爬虫"
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.31,<3",
@@ -16,6 +16,7 @@ docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.27"]
 [project.scripts]
 jfjb = "newspaper_pdf.jfjb_spider:main"
 rmrb = "newspaper_pdf.rmrb_spider:main"
+gmrb = "newspaper_pdf.gmrb_spider:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

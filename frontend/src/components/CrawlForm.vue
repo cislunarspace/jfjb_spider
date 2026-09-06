@@ -7,6 +7,7 @@
       <select v-model="form.paper_type" @change="onPaperTypeChange">
         <option value="jfjb">解放军报</option>
         <option value="rmrb">人民日报</option>
+        <option value="gmrb">光明日报</option>
       </select>
     </div>
 
@@ -85,7 +86,7 @@ defineProps<{ running: boolean }>()
 const mode = ref<'single' | 'batch'>('single')
 
 const form = reactive({
-  paper_type: 'jfjb' as 'jfjb' | 'rmrb',
+  paper_type: 'jfjb' as 'jfjb' | 'rmrb' | 'gmrb',
   paper_date: new Date().toISOString().slice(0, 10),
   start_date: '',
   end_date: '',
@@ -106,6 +107,9 @@ function onPaperTypeChange() {
   if (form.paper_type === 'rmrb') {
     mode.value = 'single'
     form.output_dir = 'output/rmrb'
+  } else if (form.paper_type === 'gmrb') {
+    mode.value = 'single'
+    form.output_dir = 'output/gmrb'
   } else {
     form.output_dir = 'output'
   }

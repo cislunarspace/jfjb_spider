@@ -27,6 +27,7 @@ impl CrawlHandle {
         match request.paper_type.as_str() {
             "jfjb" => cmd.arg("python").arg("-m").arg("newspaper_pdf.jfjb_spider"),
             "rmrb" => cmd.arg("python").arg("-m").arg("newspaper_pdf.rmrb_spider"),
+            "gmrb" => cmd.arg("python").arg("-m").arg("newspaper_pdf.gmrb_spider"),
             other => return Err(format!("未知报纸类型: {other}")),
         };
 
