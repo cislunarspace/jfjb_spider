@@ -214,8 +214,8 @@ class TestPDFExporterExportArticles:
     def _make_exporter() -> PDFExporter:
         """创建使用系统可用 TTF 字体的 PDFExporter。
 
-        自动发现系统上的 TTF 字体（跳过 ReportLab 不支持的 OTF/TTC），
-        无可用字体时跳过测试。
+        自动发现系统上的 TTF 字体（跳过 ReportLab 不支持的 OTF/CFF 轮廓 TTC），
+        渲染必需的中文字体（SimHei/SimSun）不可用时跳过测试。
         """
         from newspaper_pdf.fonts import _find_font_in_dirs, _get_system_font_dirs
 
@@ -223,10 +223,22 @@ class TestPDFExporterExportArticles:
         font_map: dict[str, Path] = {}
 
         # 按候选列表查找可用 TTF（跳过 OTF/TTC，ReportLab 兼容性差）
-        cjk_bold = _find_font_in_dirs("UnBatangBold.ttf", dirs) or _find_font_in_dirs("WenQuanYiZenHei.ttf", dirs)
-        cjk_regular = _find_font_in_dirs("UnBatang.ttf", dirs) or _find_font_in_dirs("WenQuanYiMicroHei.ttf", dirs)
+        cjk_bold = (
+            _find_font_in_dirs("simhei.ttf", dirs)
+            or _find_font_in_dirs("SIMHEI.TTF", dirs)
+            or _find_font_in_dirs("UnBatangBold.ttf", dirs)
+            or _find_font_in_dirs("WenQuanYiZenHei.ttf", dirs)
+        )
+        cjk_regular = (
+            _find_font_in_dirs("STSONG.TTF", dirs)
+            or _find_font_in_dirs("simkai.ttf", dirs)
+            or _find_font_in_dirs("simfang.ttf", dirs)
+            or _find_font_in_dirs("UnBatang.ttf", dirs)
+            or _find_font_in_dirs("WenQuanYiMicroHei.ttf", dirs)
+        )
         times = (
-            _find_font_in_dirs("LiberationSerif-Regular.ttf", dirs)
+            _find_font_in_dirs("times.ttf", dirs)
+            or _find_font_in_dirs("LiberationSerif-Regular.ttf", dirs)
             or _find_font_in_dirs("DejaVuSerif.ttf", dirs)
             or _find_font_in_dirs("FreeSerif.ttf", dirs)
         )
@@ -238,8 +250,9 @@ class TestPDFExporterExportArticles:
         if times:
             font_map["TimesNewRoman"] = times
 
-        if not font_map:
-            pytest.skip("系统无可用 TTF 字体，跳过 PDF 生成测试")
+        # PDF 渲染必需中文字体，缺失时 ReportLab 会在构建段落时抛异常
+        if "SimHei" not in font_map or "SimSun" not in font_map:
+            pytest.skip("系统无可用 CJK TTF 字体，跳过 PDF 生成测试")
         return PDFExporter(style_prefix="Test", custom_font_paths=font_map)
 
     def test_export_empty_list(self, tmp_path: Path) -> None:
